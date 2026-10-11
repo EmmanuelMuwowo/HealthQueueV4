@@ -85,6 +85,7 @@ export default function Reception() {
       setResult(res.data);
       setForm({ ...form, full_name: '', phone_number: '', gender: '', reason: '' });
     } catch (err) {
+       setResult(null);
       setError(err.response?.data?.error || 'Could not register the patient.');
     } finally {
       setLoading(false);

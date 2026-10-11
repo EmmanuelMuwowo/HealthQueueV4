@@ -3,6 +3,7 @@ import Login, { HOME_BY_ROLE } from './pages/Login';
 import Reception from './pages/Reception';
 import Clinic from './pages/Clinic';
 import Manager from './pages/Manager';
+import Display from './pages/Display';
 
 const getStaff = () => JSON.parse(localStorage.getItem('staff') || 'null');
 
@@ -49,6 +50,7 @@ export default function App() {
           <Protected roles={['manager', 'admin']}>
             <Manager />
           </Protected>} />
+        <Route path="/display" element={<Display />} />  
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

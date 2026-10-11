@@ -18,9 +18,12 @@ const registerVisit = async (req, res) => {
     // 1. Find patient by phone, or create
     let patient;
     if (phone_number) {
-      const found = await client.query(
-        'SELECT * FROM patients WHERE phone_number = $1 ORDER BY id LIMIT 1',
-        [phone_number]
+            const found = await client.query(
+        `SELECT * FROM patients
+         WHERE phone_number = $1
+           AND LOWER(TRIM(full_name)) = LOWER(TRIM($2))
+         ORDER BY id LIMIT 1`,
+        [phone_number, full_name]
       );
       patient = found.rows[0];
     }
@@ -31,6 +34,26 @@ const registerVisit = async (req, res) => {
         [full_name, phone_number || null, date_of_birth || null, gender || null]
       );
       patient = created.rows[0];
+    }
+
+
+        // Guard: one active token per patient per service point
+    const duplicate = await client.query(
+      `SELECT qt.token_number, qt.status
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       WHERE v.patient_id = $1
+         AND qt.service_point_id = $2
+         AND qt.queue_date = CURRENT_DATE
+         AND qt.status IN ('waiting', 'called', 'in_consultation')
+       LIMIT 1`,
+      [patient.id, service_point_id]
+    );
+    if (duplicate.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `${patient.full_name} already has an active token (${duplicate.rows[0].token_number}) in this queue.`,
+      });
     }
 
     // 2. Service point
