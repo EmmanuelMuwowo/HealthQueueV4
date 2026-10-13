@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import TopBar from '../components/TopBar';
-
+import ReceptionNav from '../components/ReceptionNav';
 const S = {
   page: {
     minHeight: '100vh', backgroundColor: '#F2F2F7',
@@ -95,6 +95,7 @@ export default function Reception() {
   return (
     <div style={S.page}>
       <TopBar subtitle="Reception · Register patient" />
+      <ReceptionNav />
       <div style={S.body}>
         <div style={S.card}>
           <h2 style={S.h2}>Register walk-in patient</h2>

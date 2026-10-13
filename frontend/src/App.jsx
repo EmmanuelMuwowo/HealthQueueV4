@@ -4,6 +4,7 @@ import Reception from './pages/Reception';
 import Clinic from './pages/Clinic';
 import Manager from './pages/Manager';
 import Display from './pages/Display';
+import Appointments from './pages/Appointments';
 
 const getStaff = () => JSON.parse(localStorage.getItem('staff') || 'null');
 
@@ -50,6 +51,10 @@ export default function App() {
           <Protected roles={['manager', 'admin']}>
             <Manager />
           </Protected>} />
+        <Route path="/reception/appointments" element={
+  <Protected roles={['receptionist', 'admin']}>
+    <Appointments />
+  </Protected>} />  
         <Route path="/display" element={<Display />} />  
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
