@@ -17,6 +17,8 @@ const analyticsRoutes = require('./routes/analytics');
 app.use('/api/analytics', analyticsRoutes);
 const publicRoutes = require('./routes/public');
 app.use('/api/public', publicRoutes);
+const appointmentRoutes = require('./routes/appointments');
+app.use('/api/appointments', appointmentRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {
