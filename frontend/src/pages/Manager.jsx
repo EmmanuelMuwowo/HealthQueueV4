@@ -75,6 +75,7 @@ function BarChart({ rows, color, valueText }) {
 
 export default function Manager() {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  const [trend, setTrend] = useState([]);
   const [date, setDate] = useState(today);
   const [spId, setSpId] = useState('');
   const [servicePoints, setServicePoints] = useState([]);
@@ -98,11 +99,27 @@ export default function Manager() {
       .catch(() => {});
   }, [date, spId]);
 
+    useEffect(() => {
+    const params = { days: 14 };
+    if (spId) params.service_point_id = spId;
+    api.get('/analytics/trend', { params })
+      .then((res) => setTrend(res.data.rows))
+      .catch(() => {});
+  }, [spId]);
+
   const arrivals = (summary?.arrivals_by_hour || []).map((r) => ({
     label: hourLabel(r.hour), value: r.arrivals, wait: num(r.avg_wait_minutes),
   }));
   const throughput = (summary?.throughput_by_hour || []).map((r) => ({
     label: hourLabel(r.hour), value: r.served,
+  }));
+
+    const trendRows = trend.map((r) => ({
+    label: r.date.slice(5), // MM-DD
+    value: num(r.avg_wait_minutes) || 0,
+    wait: num(r.avg_wait_minutes),
+    served: r.served,
+    registered: r.registered,
   }));
 
   return (
@@ -179,6 +196,15 @@ export default function Manager() {
             </div>
           </>
         )}
+
+                <div style={S.card}>
+          <h2 style={S.h2}>Waiting-time trend (last 14 days)</h2>
+          <p style={S.hint}>
+            Average wait per day. Days with no completed consultations show no wait.
+          </p>
+          <BarChart rows={trendRows} color="#FF9500"
+            valueText={(r) => `${fmt(r.wait, ' min')} · ${r.served}/${r.registered} served`} />
+        </div>
 
         <div style={S.card}>
           <h2 style={S.h2}>Service point comparison</h2>

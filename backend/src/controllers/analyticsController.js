@@ -100,4 +100,33 @@ const getByServicePoint = async (req, res) => {
   }
 };
 
-module.exports = { getSummary, getByServicePoint };
+// GET /api/analytics/trend?days=14&service_point_id=1
+// One row per day that had visits: registered, served, average wait and service time.
+const getTrend = async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 14, 1), 90);
+    const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
+
+    const result = await pool.query(
+      `SELECT queue_date::text AS date,
+         COUNT(*)::int AS registered,
+         COUNT(*) FILTER (WHERE status = 'completed')::int AS served,
+         ROUND((AVG(EXTRACT(EPOCH FROM (consultation_start - arrival_time)) / 60)
+           FILTER (WHERE consultation_start IS NOT NULL))::numeric, 1) AS avg_wait_minutes,
+         ROUND((AVG(EXTRACT(EPOCH FROM (consultation_end - consultation_start)) / 60)
+           FILTER (WHERE consultation_end IS NOT NULL))::numeric, 1) AS avg_service_minutes
+       FROM queue_tokens
+       WHERE queue_date >= CURRENT_DATE - ($1::int - 1)
+         AND ($2::int IS NULL OR service_point_id = $2)
+       GROUP BY queue_date
+       ORDER BY queue_date`,
+      [days, sp]
+    );
+    res.json({ days, service_point_id: sp, rows: result.rows });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+module.exports = { getSummary, getByServicePoint, getTrend };
