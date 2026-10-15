@@ -1,5 +1,6 @@
 const pool = require('../db');
 const { getAverageServiceMinutes } = require('../services/queueService');
+const { deliver, calledMessage } = require('../services/smsService');
 
 // Clinicians can only touch their own service point
 const canAccess = (staff, spId) =>
@@ -66,6 +67,27 @@ const getQueue = async (req, res) => {
   }
 };
 
+const notifyCalled = async (token) => {
+  const info = await pool.query(
+    `SELECT p.phone_number, sp.name AS service_point
+     FROM visits v
+     JOIN patients p ON p.id = v.patient_id
+     JOIN service_points sp ON sp.id = $2
+     WHERE v.id = $1`,
+    [token.visit_id, token.service_point_id]
+  );
+  const row = info.rows[0];
+  if (!row || !row.phone_number) return;
+  await deliver({
+    tokenId: token.id,
+    kind: 'called',
+    phone: row.phone_number,
+    message: calledMessage({
+      token_number: token.token_number,
+      service_point: row.service_point,
+    }),
+  });
+};
 // POST /api/queue/:servicePointId/call-next
 const callNext = async (req, res) => {
   const spId = parseInt(req.params.servicePointId);
@@ -114,6 +136,7 @@ const callNext = async (req, res) => {
     await logEvent(client, token, 'called', token.called_time, req.staff.id);
 
     await client.query('COMMIT');
+    notifyCalled(token).catch(console.error);
     res.json(token);
   } catch (err) {
     await client.query('ROLLBACK');

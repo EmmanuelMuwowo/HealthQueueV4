@@ -1,5 +1,6 @@
 const pool = require('../db');
 const { createVisitAndToken } = require('../services/visitService');
+const { deliver, registrationMessage } = require('../services/smsService');
 
 const registerVisit = async (req, res) => {
   if (!req.body.full_name || !req.body.service_point_id) {
@@ -15,6 +16,20 @@ const registerVisit = async (req, res) => {
       req.staff.id
     );
     await client.query('COMMIT');
+        // SMS goes out after the commit and can never block or break registration
+    if (result.patient.phone_number) {
+      deliver({
+        tokenId: result.token.id,
+        kind: 'registered',
+        phone: result.patient.phone_number,
+        message: registrationMessage({
+          token_number: result.token.token_number,
+          service_point: result.service_point,
+          patients_ahead: result.ewt.patients_ahead,
+          ewt_minutes: result.ewt.ewt_minutes,
+        }),
+      }).catch(console.error);
+    }
     res.status(201).json(result);
   } catch (err) {
     await client.query('ROLLBACK');

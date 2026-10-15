@@ -1,5 +1,6 @@
 const pool = require('../db');
 const { httpError, findOrCreatePatient, createVisitAndToken } = require('../services/visitService');
+const { deliver, registrationMessage } = require('../services/smsService');
 
 const TZ = 'Africa/Lusaka';
 
@@ -146,6 +147,20 @@ const checkIn = async (req, res) => {
     await client.query(`UPDATE appointments SET status = 'checked_in' WHERE id = $1`, [id]);
 
     await client.query('COMMIT');
+        // SMS goes out after the commit and can never block or break registration
+    if (result.patient.phone_number) {
+      deliver({
+        tokenId: result.token.id,
+        kind: 'registered',
+        phone: result.patient.phone_number,
+        message: registrationMessage({
+          token_number: result.token.token_number,
+          service_point: result.service_point,
+          patients_ahead: result.ewt.patients_ahead,
+          ewt_minutes: result.ewt.ewt_minutes,
+        }),
+      }).catch(console.error);
+    }
     res.status(201).json({ ...result, appointment_id: id });
   } catch (err) {
     await client.query('ROLLBACK');
