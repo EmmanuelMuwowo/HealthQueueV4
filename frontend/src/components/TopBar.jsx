@@ -1,8 +1,8 @@
 export default function TopBar({ subtitle }) {
-  const staff = JSON.parse(localStorage.getItem('staff') || '{}');
+  const staff = JSON.parse(sessionStorage.getItem('staff') || '{}');
 
   const signOut = () => {
-    localStorage.clear();
+    sessionStorage.clear();
     window.location.href = '/login';
   };
 

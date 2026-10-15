@@ -61,7 +61,7 @@ const S = {
 };
 
 export default function Clinic() {
-  const staff = JSON.parse(localStorage.getItem('staff') || '{}');
+  const staff = JSON.parse(sessionStorage.getItem('staff') || '{}');
   const spId = staff.service_point_id || 1;
   const [queue, setQueue] = useState(null);
   const [error, setError] = useState('');

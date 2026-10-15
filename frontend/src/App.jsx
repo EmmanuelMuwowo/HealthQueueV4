@@ -6,12 +6,12 @@ import Manager from './pages/Manager';
 import Display from './pages/Display';
 import Appointments from './pages/Appointments';
 
-const getStaff = () => JSON.parse(localStorage.getItem('staff') || 'null');
+const getStaff = () => JSON.parse(sessionStorage.getItem('staff') || 'null');
 
 // Only lets the listed roles in; everyone else is sent to their own screen
 function Protected({ roles, children }) {
   const staff = getStaff();
-  if (!staff || !localStorage.getItem('token')) return <Navigate to="/login" replace />;
+  if (!staff || !sessionStorage.getItem('token')) return <Navigate to="/login" replace />;
   if (!roles.includes(staff.role)) {
     return <Navigate to={HOME_BY_ROLE[staff.role] || '/login'} replace />;
   }
@@ -22,7 +22,7 @@ function Protected({ roles, children }) {
 function Placeholder({ title }) {
   const staff = getStaff();
   const signOut = () => {
-    localStorage.clear();
+    sessionStorage.clear();
     window.location.href = '/login';
   };
   return (
@@ -34,11 +34,26 @@ function Placeholder({ title }) {
   );
 }
 
+// Already signed in? Skip the login page and go to your own screen
+function LoginRoute() {
+  const staff = getStaff();
+  const home = staff && HOME_BY_ROLE[staff.role];
+  if (home && sessionStorage.getItem('token')) return <Navigate to={home} replace />;
+  return <Login />;
+}
+
+function HomeRedirect() {
+  const staff = getStaff();
+  const home = staff && HOME_BY_ROLE[staff.role];
+  if (home && sessionStorage.getItem('token')) return <Navigate to={home} replace />;
+  return <Navigate to="/login" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={<LoginRoute />} />
         <Route path="/reception" element={
           <Protected roles={['receptionist', 'admin']}>
             <Reception />
@@ -56,7 +71,7 @@ export default function App() {
     <Appointments />
   </Protected>} />  
         <Route path="/display" element={<Display />} />  
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<HomeRedirect />} />
       </Routes>
     </BrowserRouter>
   );

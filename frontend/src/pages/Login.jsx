@@ -57,8 +57,8 @@ export default function Login() {
     setError('');
     try {
       const res = await api.post('/auth/login', { username, password });
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('staff', JSON.stringify(res.data.staff));
+      sessionStorage.setItem('token', res.data.token);
+      sessionStorage.setItem('staff', JSON.stringify(res.data.staff));
       navigate(HOME_BY_ROLE[res.data.staff.role] || '/login');
     } catch (err) {
       setError(
