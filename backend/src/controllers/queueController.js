@@ -48,6 +48,18 @@ const getQueue = async (req, res) => {
     const waitingRaw = result.rows.filter((t) => t.status === 'waiting');
     const { avg, source } = await getAverageServiceMinutes(pool, spId);
 
+        const skippedRes = await pool.query(
+      `SELECT qt.id, qt.token_number, p.full_name
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       JOIN patients p ON p.id = v.patient_id
+       WHERE qt.service_point_id = $1
+         AND qt.queue_date = CURRENT_DATE
+         AND qt.status = 'skipped'
+       ORDER BY qt.sequence_no`,
+      [spId]
+    );
+
     // EWT = patients ahead x average service duration
     const waiting = waitingRaw.map((t, i) => {
       const ahead = active.length + i;
@@ -58,6 +70,7 @@ const getQueue = async (req, res) => {
       service_point: sp.rows[0],
       now_serving: active[0] || null,
       waiting,
+      skipped: skippedRes.rows,
       avg_service_minutes: Math.round(avg * 10) / 10,
       avg_source: source,
     });
@@ -206,4 +219,135 @@ const completeConsultation = transition({
   eventType: 'completed',
 });
 
-module.exports = { getQueue, callNext, startConsultation, completeConsultation };
+
+// PUT /api/queue/tokens/:id/skip : a called patient did not show up
+const skipToken = async (req, res) => {
+  const tokenId = parseInt(req.params.id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      'SELECT * FROM queue_tokens WHERE id = $1 FOR UPDATE',
+      [tokenId]
+    );
+    if (found.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Token not found' });
+    }
+    const current = found.rows[0];
+    if (!canAccess(req.staff, current.service_point_id)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Not your service point' });
+    }
+    if (current.status !== 'called') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `Only a called patient can be skipped. ${current.token_number} is "${current.status}".`,
+      });
+    }
+
+    const updated = await client.query(
+      `UPDATE queue_tokens SET status = 'skipped' WHERE id = $1 RETURNING *`,
+      [tokenId]
+    );
+    const token = updated.rows[0];
+    await logEvent(client, token, 'skipped', new Date(), req.staff.id);
+
+    await client.query('COMMIT');
+    res.json(token);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+};
+
+// PUT /api/queue/tokens/:id/requeue : a skipped patient arrives later.
+// Same token number, new place at the back. arrival_time is untouched,
+// so their total wait is still measured from when they first arrived.
+const requeueToken = async (req, res) => {
+  const tokenId = parseInt(req.params.id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      `SELECT *, (queue_date = CURRENT_DATE) AS is_today
+       FROM queue_tokens WHERE id = $1 FOR UPDATE`,
+      [tokenId]
+    );
+    if (found.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Token not found' });
+    }
+    const current = found.rows[0];
+    if (!canAccess(req.staff, current.service_point_id)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Not your service point' });
+    }
+    if (current.status !== 'skipped') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `Only a skipped patient can be re-queued. ${current.token_number} is "${current.status}".`,
+      });
+    }
+    if (!current.is_today) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Only today\'s skipped tokens can be re-queued.' });
+    }
+
+    // The patient may have been registered again since being skipped
+    const clash = await client.query(
+      `SELECT qt.token_number
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       WHERE v.patient_id = (SELECT patient_id FROM visits WHERE id = $1)
+         AND qt.service_point_id = $2
+         AND qt.queue_date = CURRENT_DATE
+         AND qt.status IN ('waiting', 'called', 'in_consultation')
+         AND qt.id <> $3
+       LIMIT 1`,
+      [current.visit_id, current.service_point_id, current.id]
+    );
+    if (clash.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: `This patient already has an active token (${clash.rows[0].token_number}) in this queue.`,
+      });
+    }
+
+    // A fresh sequence number puts them at the back of the queue
+    const counter = await client.query(
+      `INSERT INTO token_counters (service_point_id, queue_date, last_seq)
+       VALUES ($1, CURRENT_DATE, 1)
+       ON CONFLICT (service_point_id, queue_date)
+       DO UPDATE SET last_seq = token_counters.last_seq + 1
+       RETURNING last_seq`,
+      [current.service_point_id]
+    );
+
+    const updated = await client.query(
+      `UPDATE queue_tokens
+       SET status = 'waiting', sequence_no = $2, called_time = NULL, called_by = NULL
+       WHERE id = $1 RETURNING *`,
+      [tokenId, counter.rows[0].last_seq]
+    );
+    const token = updated.rows[0];
+    // 'recalled' is the closest event type already allowed in the schema
+    await logEvent(client, token, 'recalled', new Date(), req.staff.id);
+
+    await client.query('COMMIT');
+    res.json(token);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = {
+  getQueue, callNext, startConsultation, completeConsultation, skipToken, requeueToken,
+};

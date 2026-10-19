@@ -58,6 +58,16 @@ const S = {
     backgroundColor: '#fff', borderRadius: 12,
   },
   note: { fontSize: 12, color: '#8E8E93', marginTop: 16, textAlign: 'center' },
+
+    noShowBtn: {
+    padding: '12px 20px', backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff',
+    border: '1px solid rgba(255,255,255,0.5)', borderRadius: 10, fontSize: 15,
+    fontWeight: 600, cursor: 'pointer',
+  },
+  requeueBtn: {
+    padding: '7px 14px', backgroundColor: '#E3F2FD', color: '#1565C0', border: 'none',
+    borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+  },
 };
 
 export default function Clinic() {
@@ -78,7 +88,7 @@ export default function Clinic() {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 10000);
+    const timer = setInterval(load, 3000);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -140,6 +150,16 @@ export default function Clinic() {
                   Complete
                 </button>
               )}
+                            {current.status === 'called' && (
+                <button style={S.noShowBtn} disabled={busy}
+                  onClick={() => {
+                    if (window.confirm(`Mark ${current.token_number} as a no-show?`)) {
+                      act(() => api.put(`/queue/tokens/${current.id}/skip`));
+                    }
+                  }}>
+                  No-show
+                </button>
+              )}
               <span style={S.statusPill}>{current.status.replace('_', ' ')}</span>
             </div>
           </div>
@@ -161,10 +181,28 @@ export default function Clinic() {
           ))
         )}
 
+                {(queue.skipped || []).length > 0 && (
+          <>
+            <div style={{ ...S.sectionLabel, marginTop: 24 }}>
+              Skipped today ({queue.skipped.length})
+            </div>
+            {queue.skipped.map((t) => (
+              <div key={t.id} style={S.row}>
+                <div style={S.rowToken}>{t.token_number}</div>
+                <div style={S.rowName}>{t.full_name}</div>
+                <button style={S.requeueBtn} disabled={busy}
+                  onClick={() => act(() => api.put(`/queue/tokens/${t.id}/requeue`))}>
+                  Re-queue
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+
         <div style={S.note}>
           EWT = patients ahead × {queue.avg_service_minutes} min
           ({queue.avg_source === 'default' ? 'default average' : 'rolling average of recent visits'})
-          · refreshes every 10 seconds
+          · refreshes every 3 seconds
         </div>
       </div>
     </div>

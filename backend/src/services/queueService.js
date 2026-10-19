@@ -1,8 +1,7 @@
-const MIN_HISTORY = 5;   // completed consultations needed before trusting the average
-const ROLLING_WINDOW = 20;
+const MIN_SESSION_COMPLETED = 3;  // proposal 4.4.2: fewer than 3 completed today -> default
+const ROLLING_WINDOW = 10;        // proposal 4.4.2: last ten completed service durations
 
 // Average service duration in minutes for a service point.
-// Falls back to the service point's default (8 min) when history is thin.
 const getAverageServiceMinutes = async (db, servicePointId) => {
   const spRes = await db.query(
     'SELECT default_service_minutes FROM service_points WHERE id = $1',
@@ -10,6 +9,19 @@ const getAverageServiceMinutes = async (db, servicePointId) => {
   );
   const fallback = spRes.rows[0]?.default_service_minutes ?? 8;
 
+  // How many consultations were completed in today's session?
+  const todayRes = await db.query(
+    `SELECT COUNT(*)::int AS n FROM queue_tokens
+     WHERE service_point_id = $1
+       AND queue_date = CURRENT_DATE
+       AND status = 'completed'
+       AND consultation_start IS NOT NULL
+       AND consultation_end IS NOT NULL`,
+    [servicePointId]
+  );
+  const completedToday = todayRes.rows[0].n;
+
+  // The last ten completed durations at this service point
   const res = await db.query(
     `SELECT EXTRACT(EPOCH FROM (consultation_end - consultation_start)) / 60 AS minutes
      FROM queue_tokens
@@ -22,8 +34,8 @@ const getAverageServiceMinutes = async (db, servicePointId) => {
     [servicePointId, ROLLING_WINDOW]
   );
 
-  if (res.rows.length < MIN_HISTORY) {
-    return { avg: fallback, source: 'default', sample_size: res.rows.length };
+  if (completedToday < MIN_SESSION_COMPLETED || res.rows.length === 0) {
+    return { avg: fallback, source: 'default', sample_size: completedToday };
   }
   const sum = res.rows.reduce((a, r) => a + parseFloat(r.minutes), 0);
   return { avg: sum / res.rows.length, source: 'rolling_average', sample_size: res.rows.length };
