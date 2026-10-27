@@ -1,4 +1,4 @@
-HealthQueue test report, 27/10/2026, 14:40:53 (Lusaka time)
+HealthQueue test report, 27/10/2026, 14:45:15 (Lusaka time)
 
 Skip and re-queue    11 passed, 0 failed   OK
 Token timeline        9 passed, 0 failed   OK
@@ -55,7 +55,7 @@ PASS  CSV row count equals tokens in the trend chart
 PASS  Clinician is refused (403)
 PASS  Bad date is refused (400)
 
-Day 2026-10-27: CSV average wait 0.00 min, dashboard 0.0 min
+Day 2026-10-27: CSV average wait 2.20 min, dashboard 2.2 min
 PASS  CSV average wait matches the dashboard (within 0.15 min)
 
 7 passed, 0 failed
