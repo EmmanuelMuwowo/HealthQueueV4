@@ -1,0 +1,61 @@
+HealthQueue test report, 27/10/2026, 14:40:53 (Lusaka time)
+
+Skip and re-queue    11 passed, 0 failed   OK
+Token timeline        9 passed, 0 failed   OK
+CSV export            7 passed, 0 failed   OK
+
+Total: 27 passed, 0 failed, 0 script(s) not run
+
+===== testSkip.js =====
+PASS  Register Skip Test A
+PASS  Register Skip Test B
+PASS  Register Skip Test C
+PASS  Call next -> called
+PASS  Skip the called patient
+PASS  Call next works again after a skip
+PASS  Skipped list contains the skipped token
+PASS  Re-queue -> waiting
+PASS  Re-queued patient is last in waiting
+PASS  Re-queued token left the skipped list
+PASS  Skipping a waiting patient is refused (409)
+
+11 passed, 0 failed
+
+===== testTimeline.js =====
+PASS  Token list loads
+PASS  Timeline loads
+
+Timeline for GOP-002 (General Outpatient)
+  14:40:54  arrived  (Grace Mulenga)
+  14:40:54  called  (Dr. Banda)
+  14:40:54  consultation_started  (Dr. Banda)
+  14:40:54  completed  (Dr. Banda)
+Intervals: {
+  wait_until_called_minutes: 0,
+  call_to_start_minutes: 0,
+  total_wait_minutes: 0,
+  service_minutes: 0
+} 
+
+PASS  Event log has "arrived"
+PASS  Event log has "called"
+PASS  Event log has "consultation_started"
+PASS  Event log has "completed"
+PASS  Total wait is a number
+PASS  Total wait = wait until called + call to start (within 0.2 min)
+PASS  Clinician is refused (403)
+
+9 passed, 0 failed
+
+===== testExport.js =====
+PASS  Export loads as CSV
+PASS  Header has the expected columns
+PASS  No name or phone columns
+PASS  CSV row count equals tokens in the trend chart
+PASS  Clinician is refused (403)
+PASS  Bad date is refused (400)
+
+Day 2026-10-27: CSV average wait 0.00 min, dashboard 0.0 min
+PASS  CSV average wait matches the dashboard (within 0.15 min)
+
+7 passed, 0 failed
