@@ -50,6 +50,17 @@ const S = {
     color: '#FF3B30', fontSize: 14, backgroundColor: '#FFF2F2',
     padding: '10px 14px', borderRadius: 8, marginBottom: 16,
   },
+    tlRow: {
+    display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0',
+    borderBottom: '1px solid #F2F2F7',
+  },
+  tlTime: { width: 90, fontSize: 14, fontWeight: 700, color: '#007AFF', fontFamily: 'monospace' },
+  tlLabel: { flex: 1, fontSize: 14, color: '#1C1C1E' },
+  tlActor: { fontSize: 13, color: '#8E8E93' },
+  tlSummary: {
+    marginTop: 16, padding: '14px 18px', backgroundColor: '#EAF3FF',
+    borderRadius: 12, fontSize: 14, color: '#3C3C43', lineHeight: 1.7,
+  },
 };
 
 const num = (v) => (v === null || v === undefined ? null : parseFloat(v));
@@ -73,9 +84,27 @@ function BarChart({ rows, color, valueText }) {
   ));
 }
 
+const EVENT_LABELS = {
+  arrived: 'Arrived and registered',
+  called: 'Called by clinician',
+  consultation_started: 'Consultation started',
+  completed: 'Consultation completed',
+  skipped: 'Skipped (no-show)',
+  recalled: 'Re-queued',
+  cancelled: 'Cancelled',
+};
+
+const clock = (iso) =>
+  new Date(iso).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Africa/Lusaka',
+  });
+
 export default function Manager() {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
   const [trend, setTrend] = useState([]);
+  const [tokens, setTokens] = useState([]);
+  const [tokenId, setTokenId] = useState('');
+  const [timeline, setTimeline] = useState(null);
   const [date, setDate] = useState(today);
   const [spId, setSpId] = useState('');
   const [servicePoints, setServicePoints] = useState([]);
@@ -106,6 +135,24 @@ export default function Manager() {
       .then((res) => setTrend(res.data.rows))
       .catch(() => {});
   }, [spId]);
+
+    useEffect(() => {
+    const params = { date };
+    if (spId) params.service_point_id = spId;
+    setTokenId('');
+    setTimeline(null);
+    api.get('/analytics/tokens', { params })
+      .then((res) => setTokens(res.data))
+      .catch(() => setTokens([]));
+  }, [date, spId]);
+
+  useEffect(() => {
+    if (!tokenId) { setTimeline(null); return; }
+    api.get(`/analytics/tokens/${tokenId}/timeline`)
+      .then((res) => setTimeline(res.data))
+      .catch(() => setTimeline(null));
+  }, [tokenId]);
+
 
   const arrivals = (summary?.arrivals_by_hour || []).map((r) => ({
     label: hourLabel(r.hour), value: r.arrivals, wait: num(r.avg_wait_minutes),
@@ -204,6 +251,46 @@ export default function Manager() {
           </p>
           <BarChart rows={trendRows} color="#FF9500"
             valueText={(r) => `${fmt(r.wait, ' min')} · ${r.served}/${r.registered} served`} />
+        </div>
+
+
+                <div style={S.card}>
+          <h2 style={S.h2}>Token timeline</h2>
+          <p style={S.hint}>
+            Pick a token to see every recorded event behind its waiting time.
+            Uses the date and service point selected above.
+          </p>
+
+          <select style={{ ...S.control, width: '100%', marginBottom: 16 }}
+            value={tokenId} onChange={(e) => setTokenId(e.target.value)}>
+            <option value="">Select a token...</option>
+            {tokens.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.token_number} · {t.status.replace('_', ' ')} · arrived {clock(t.arrival_time).slice(0, 5)}
+              </option>
+            ))}
+          </select>
+
+          {tokens.length === 0 && <div style={S.empty}>No tokens on this date.</div>}
+
+          {timeline && (
+            <>
+              {timeline.events.map((e, i) => (
+                <div key={i} style={S.tlRow}>
+                  <div style={S.tlTime}>{clock(e.event_time)}</div>
+                  <div style={S.tlLabel}>{EVENT_LABELS[e.event_type] || e.event_type}</div>
+                  <div style={S.tlActor}>{e.actor || 'system'}</div>
+                </div>
+              ))}
+              <div style={S.tlSummary}>
+                Waited until called: <strong>{fmt(timeline.intervals.wait_until_called_minutes, ' min')}</strong>
+                {' + '}call to consultation start: <strong>{fmt(timeline.intervals.call_to_start_minutes, ' min')}</strong>
+                <br />
+                Total waiting time: <strong>{fmt(timeline.intervals.total_wait_minutes, ' min')}</strong>
+                {' · '}Service time: <strong>{fmt(timeline.intervals.service_minutes, ' min')}</strong>
+              </div>
+            </>
+          )}
         </div>
 
         <div style={S.card}>

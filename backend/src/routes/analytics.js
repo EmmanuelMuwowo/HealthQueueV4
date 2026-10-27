@@ -1,10 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { getSummary, getByServicePoint, getTrend } = require('../controllers/analyticsController');
+const {
+  getSummary, getByServicePoint, getTrend, listTokens, getTokenTimeline,
+} = require('../controllers/analyticsController');
 const { authenticate, authorize } = require('../middleware/auth');
 
-router.get('/summary', authenticate, authorize('manager', 'admin'), getSummary);
-router.get('/service-points', authenticate, authorize('manager', 'admin'), getByServicePoint);
-router.get('/trend', authenticate, authorize('manager', 'admin'), getTrend);
+const managers = [authenticate, authorize('manager', 'admin')];
+
+router.get('/summary', ...managers, getSummary);
+router.get('/service-points', ...managers, getByServicePoint);
+router.get('/trend', ...managers, getTrend);
+router.get('/tokens', ...managers, listTokens);
+router.get('/tokens/:id/timeline', ...managers, getTokenTimeline);
 
 module.exports = router;

@@ -129,4 +129,79 @@ const getTrend = async (req, res) => {
   }
 };
 
-module.exports = { getSummary, getByServicePoint, getTrend };
+const minutesBetween = (a, b) =>
+  a && b ? Math.round(((new Date(b) - new Date(a)) / 60000) * 10) / 10 : null;
+
+// GET /api/analytics/tokens?date=YYYY-MM-DD&service_point_id=1  (defaults to today)
+const listTokens = async (req, res) => {
+  try {
+    const date = req.query.date || null;
+    const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
+    const result = await pool.query(
+      `SELECT qt.id, qt.token_number, qt.priority, qt.status, qt.arrival_time,
+              sp.name AS service_point
+       FROM queue_tokens qt
+       JOIN service_points sp ON sp.id = qt.service_point_id
+       WHERE qt.queue_date = COALESCE($1::date, CURRENT_DATE)
+         AND ($2::int IS NULL OR qt.service_point_id = $2)
+       ORDER BY qt.arrival_time`,
+      [date, sp]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// GET /api/analytics/tokens/:id/timeline : every recorded event for one token.
+// No patient name: analytics works on tokens, not on people.
+const getTokenTimeline = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const tok = await pool.query(
+      `SELECT qt.id, qt.token_number, qt.priority, qt.status,
+              qt.queue_date::text AS date, sp.name AS service_point
+       FROM queue_tokens qt
+       JOIN service_points sp ON sp.id = qt.service_point_id
+       WHERE qt.id = $1`,
+      [id]
+    );
+    if (tok.rows.length === 0) return res.status(404).json({ error: 'Token not found' });
+
+    const ev = await pool.query(
+      `SELECT e.event_type, e.event_time, s.full_name AS actor
+       FROM event_log e
+       LEFT JOIN staff s ON s.id = e.actor_id
+       WHERE e.token_id = $1
+       ORDER BY e.event_time, e.id`,
+      [id]
+    );
+    const events = ev.rows;
+    const reversed = [...events].reverse();
+
+    const arrived = events.find((e) => e.event_type === 'arrived')?.event_time;
+    const started = reversed.find((e) => e.event_type === 'consultation_started')?.event_time;
+    const completed = reversed.find((e) => e.event_type === 'completed')?.event_time;
+    // The call that led to the consultation (a token can be called, skipped and re-queued)
+    const called = started
+      ? reversed.find((e) => e.event_type === 'called' && new Date(e.event_time) <= new Date(started))?.event_time
+      : reversed.find((e) => e.event_type === 'called')?.event_time;
+
+    res.json({
+      token: tok.rows[0],
+      events,
+      intervals: {
+        wait_until_called_minutes: minutesBetween(arrived, called),
+        call_to_start_minutes: minutesBetween(called, started),
+        total_wait_minutes: minutesBetween(arrived, started),
+        service_minutes: minutesBetween(started, completed),
+      },
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+module.exports = { getSummary, getByServicePoint, getTrend, listTokens, getTokenTimeline };

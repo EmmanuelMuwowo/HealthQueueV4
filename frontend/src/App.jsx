@@ -49,6 +49,19 @@ function HomeRedirect() {
   return <Navigate to="/login" replace />;
 }
 
+function TestBanner() {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000,
+      backgroundColor: '#FF9500', color: '#fff', textAlign: 'center',
+      fontSize: 12, fontWeight: 700, padding: '5px 8px', letterSpacing: 0.5,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    }}>
+      TEST ENVIRONMENT: DO NOT USE REAL DATA
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
