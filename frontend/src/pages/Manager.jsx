@@ -153,6 +153,24 @@ export default function Manager() {
       .catch(() => setTimeline(null));
   }, [tokenId]);
 
+    const downloadCsv = async (extraParams, filename) => {
+    try {
+      const params = { ...extraParams };
+      if (spId) params.service_point_id = spId;
+      const res = await api.get('/analytics/export', { params, responseType: 'blob' });
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setError('Could not export the data.');
+    }
+  };
+
 
   const arrivals = (summary?.arrivals_by_hour || []).map((r) => ({
     label: hourLabel(r.hour), value: r.arrivals, wait: num(r.avg_wait_minutes),
@@ -182,6 +200,14 @@ export default function Manager() {
               <option value="">All service points</option>
               {servicePoints.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
             </select>
+                        <button style={{ ...S.control, cursor: 'pointer', fontWeight: 600 }}
+              onClick={() => downloadCsv({ from: date }, `healthqueue_${date}.csv`)}>
+              Export this day
+            </button>
+            <button style={{ ...S.control, cursor: 'pointer', fontWeight: 600 }}
+              onClick={() => downloadCsv({ days: 14 }, 'healthqueue_last_14_days.csv')}>
+              Export 14 days
+            </button>
           </div>
         </div>
 

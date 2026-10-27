@@ -204,4 +204,75 @@ const getTokenTimeline = async (req, res) => {
   }
 };
 
-module.exports = { getSummary, getByServicePoint, getTrend, listTokens, getTokenTimeline };
+const csvCell = (v) => {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const EXPORT_COLUMNS = [
+  'date', 'token', 'service_point', 'visit_type', 'priority', 'status',
+  'arrived', 'called', 'consultation_start', 'consultation_end',
+  'wait_minutes', 'service_minutes',
+];
+
+// GET /api/analytics/export?from=YYYY-MM-DD&to=YYYY-MM-DD&days=14&service_point_id=1
+// One row per token. No patient names or phone numbers, and times are Lusaka local time.
+// wait_minutes = arrival to consultation start, the same definition as the dashboard.
+const exportCsv = async (req, res) => {
+  try {
+    const from = req.query.from || null;
+    const to = req.query.to || null;
+    const isDate = (s) => !s || /^\d{4}-\d{2}-\d{2}$/.test(s);
+    if (!isDate(from) || !isDate(to)) {
+      return res.status(400).json({ error: 'Dates must look like 2026-10-27' });
+    }
+    const days = req.query.days
+      ? Math.min(Math.max(parseInt(req.query.days) || 1, 1), 90)
+      : null;
+    const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
+
+    const result = await pool.query(
+      `SELECT qt.queue_date::text AS date,
+         qt.token_number AS token,
+         sp.name AS service_point,
+         v.visit_type,
+         qt.priority,
+         qt.status,
+         to_char(qt.arrival_time AT TIME ZONE '${TZ}', 'YYYY-MM-DD HH24:MI:SS') AS arrived,
+         to_char(qt.called_time AT TIME ZONE '${TZ}', 'YYYY-MM-DD HH24:MI:SS') AS called,
+         to_char(qt.consultation_start AT TIME ZONE '${TZ}', 'YYYY-MM-DD HH24:MI:SS') AS consultation_start,
+         to_char(qt.consultation_end AT TIME ZONE '${TZ}', 'YYYY-MM-DD HH24:MI:SS') AS consultation_end,
+         ROUND((EXTRACT(EPOCH FROM (qt.consultation_start - qt.arrival_time)) / 60)::numeric, 1) AS wait_minutes,
+         ROUND((EXTRACT(EPOCH FROM (qt.consultation_end - qt.consultation_start)) / 60)::numeric, 1) AS service_minutes
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       JOIN service_points sp ON sp.id = qt.service_point_id
+       WHERE qt.queue_date >= CASE WHEN $3::int IS NOT NULL
+               THEN CURRENT_DATE - ($3::int - 1)
+               ELSE COALESCE($1::date, CURRENT_DATE) END
+         AND qt.queue_date <= CASE WHEN $3::int IS NOT NULL
+               THEN CURRENT_DATE
+               ELSE COALESCE($2::date, $1::date, CURRENT_DATE) END
+         AND ($4::int IS NULL OR qt.service_point_id = $4)
+       ORDER BY qt.queue_date, qt.arrival_time`,
+      [from, to, days, sp]
+    );
+
+    const lines = result.rows.map((r) => EXPORT_COLUMNS.map((c) => csvCell(r[c])).join(','));
+    const csv = [EXPORT_COLUMNS.join(','), ...lines].join('\r\n') + '\r\n';
+
+    const label = (days ? `last_${days}_days` : `${from || 'today'}${to && to !== from ? `_to_${to}` : ''}`)
+      .replace(/[^0-9A-Za-z_-]/g, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="healthqueue_${label}.csv"`);
+    res.send(csv);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+module.exports = {
+  getSummary, getByServicePoint, getTrend, listTokens, getTokenTimeline, exportCsv,
+};
