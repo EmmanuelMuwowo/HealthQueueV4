@@ -2,6 +2,7 @@ const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// End-to-end scripts: these need the backend running
 const scripts = [
   ['Skip and re-queue', 'testSkip.js'],
   ['Token timeline', 'testTimeline.js'],
@@ -11,6 +12,7 @@ const scripts = [
 
 const report = [];
 const say = (s = '') => { console.log(s); report.push(s); };
+const details = [];
 
 const stamp = new Date().toLocaleString('en-GB', { timeZone: 'Africa/Lusaka' });
 say(`HealthQueue test report, ${stamp} (Lusaka time)`);
@@ -19,8 +21,28 @@ say('');
 let totalPass = 0;
 let totalFail = 0;
 let notRun = 0;
-const details = [];
 
+// 1. Unit tests (no server needed)
+const unit = spawnSync(
+  process.execPath,
+  ['--test', '--test-reporter=tap', path.join(__dirname, '..', 'test', 'ewt.test.js')],
+  { encoding: 'utf8' }
+);
+const unitText = (unit.stdout || '') + (unit.stderr || '');
+const unitPass = parseInt((unitText.match(/^# pass (\d+)/m) || [])[1] || '0');
+const unitFail = parseInt((unitText.match(/^# fail (\d+)/m) || [])[1] || '0');
+const unitRan = /^# tests \d+/m.test(unitText);
+totalPass += unitPass;
+totalFail += unitFail;
+if (!unitRan) notRun++;
+say(`${'EWT unit tests'.padEnd(20)} ${String(unitPass).padStart(2)} passed, ${unitFail} failed   ${
+  !unitRan ? 'NOT RUN' : unitFail > 0 ? 'FAILED' : 'OK'}`);
+for (const line of unitText.split(/\r?\n/)) {
+  if (/^not ok /.test(line)) say(`    ${line}`);
+}
+details.push(`===== test/ewt.test.js =====\n${unitText.trim()}\n`);
+
+// 2. End-to-end scripts
 for (const [label, file] of scripts) {
   const r = spawnSync(process.execPath, [path.join(__dirname, file)], { encoding: 'utf8' });
   const text = (r.stdout || '') + (r.stderr || '');
