@@ -5,6 +5,7 @@ import Clinic from './pages/Clinic';
 import Manager from './pages/Manager';
 import Display from './pages/Display';
 import Appointments from './pages/Appointments';
+import NetworkStatus from './components/NetworkStatus';
 
 const getStaff = () => JSON.parse(sessionStorage.getItem('staff') || 'null');
 
@@ -65,11 +66,17 @@ function TestBanner() {
 export default function App() {
   return (
     <BrowserRouter>
+      <TestBanner />
+      <NetworkStatus />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/reception" element={
           <Protected roles={['receptionist', 'admin']}>
             <Reception />
+          </Protected>} />
+        <Route path="/reception/appointments" element={
+          <Protected roles={['receptionist', 'admin']}>
+            <Appointments />
           </Protected>} />
         <Route path="/clinic" element={
           <Protected roles={['clinician', 'admin']}>
@@ -79,11 +86,7 @@ export default function App() {
           <Protected roles={['manager', 'admin']}>
             <Manager />
           </Protected>} />
-        <Route path="/reception/appointments" element={
-  <Protected roles={['receptionist', 'admin']}>
-    <Appointments />
-  </Protected>} />  
-        <Route path="/display" element={<Display />} />  
+        <Route path="/display" element={<Display />} />
         <Route path="*" element={<HomeRedirect />} />
       </Routes>
     </BrowserRouter>

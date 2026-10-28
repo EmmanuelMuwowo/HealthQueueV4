@@ -62,9 +62,13 @@ export default function Display() {
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
-    const load = () =>
+        const load = () =>
       api.get('/public/queue')
-        .then((res) => { setData(res.data); setOffline(false); })
+        .then((res) => {
+          setData(res.data);
+          // A reply from the service worker's cache means the data may be out of date
+          setOffline(Boolean(res.headers['x-hq-from-cache']));
+        })
         .catch(() => setOffline(true));
     load();
     const timer = setInterval(load, 5000);
@@ -83,11 +87,16 @@ export default function Display() {
         <div style={S.brand}>
           <div style={S.logo}>H</div>
           <div>
-            <div style={S.title}>Kalingalinga Urban Health Centre</div>
+            <div style={S.title}>Kalingalinga Clinic</div>
             <div style={S.sub}>Live queue status</div>
           </div>
         </div>
-        <div style={S.live}><div style={S.dot} />{offline ? 'RECONNECTING' : 'LIVE'}</div>
+        <div style={offline
+          ? { ...S.live, backgroundColor: '#F2F2F7', color: '#8E8E93' }
+          : S.live}>
+          <div style={offline ? { ...S.dot, backgroundColor: '#8E8E93' } : S.dot} />
+          {offline ? `OFFLINE · last update ${updated}` : 'LIVE'}
+        </div>
       </div>
 
       <div style={S.grid}>

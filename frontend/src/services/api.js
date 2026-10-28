@@ -4,17 +4,24 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
 });
 
-// Attach the saved token to every request
+const signal = (name) => window.dispatchEvent(new Event(name));
+
 api.interceptors.request.use((config) => {
   const token = sessionStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// If the token has expired, clear it and go back to login
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // A response from the service worker's cache means we are offline
+    signal(res.headers['x-hq-from-cache'] ? 'hq-offline' : 'hq-online');
+    return res;
+  },
   (err) => {
+    if (!err.response) signal('hq-offline'); // no reply at all: network or server down
+    else signal('hq-online');
+
     const isLogin = err.config?.url?.includes('/auth/login');
     if (err.response?.status === 401 && !isLogin) {
       sessionStorage.removeItem('token');

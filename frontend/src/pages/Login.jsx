@@ -76,7 +76,7 @@ export default function Login() {
       <div style={S.card}>
         <div style={S.logo}>H</div>
         <h1 style={S.title}>Staff Login</h1>
-        <p style={S.sub}>HealthQueue · Kalingalinga Urban Health Centre</p>
+        <p style={S.sub}>HealthQueue · Kalingalinga Clinic</p>
         {error && <div style={S.error}>{error}</div>}
         <label style={S.label}>Username</label>
         <input style={S.input} value={username} placeholder="Enter username"
