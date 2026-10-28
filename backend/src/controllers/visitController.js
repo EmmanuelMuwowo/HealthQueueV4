@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { createVisitAndToken } = require('../services/visitService');
+const { createVisitAndToken, getResultByClientRef } = require('../services/visitService');
 const { deliver, registrationMessage } = require('../services/smsService');
 
 const registerVisit = async (req, res) => {
@@ -7,38 +7,48 @@ const registerVisit = async (req, res) => {
     return res.status(400).json({ error: 'Full name and service point are required' });
   }
 
+  let result;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const result = await createVisitAndToken(
+    result = await createVisitAndToken(
       client,
       { ...req.body, visit_type: 'walk_in' },
       req.staff.id
     );
     await client.query('COMMIT');
-        // SMS goes out after the commit and can never block or break registration
-    if (result.patient.phone_number) {
-      deliver({
-        tokenId: result.token.id,
-        kind: 'registered',
-        phone: result.patient.phone_number,
-        message: registrationMessage({
-          token_number: result.token.token_number,
-          service_point: result.service_point,
-          patients_ahead: result.ewt.patients_ahead,
-          ewt_minutes: result.ewt.ewt_minutes,
-        }),
-      }).catch(console.error);
-    }
-    res.status(201).json(result);
   } catch (err) {
     await client.query('ROLLBACK');
+    // The same offline registration arrived twice at the same moment
+    if (err.code === '23505' && req.body.client_ref) {
+      const existing = await getResultByClientRef(pool, req.body.client_ref);
+      if (existing) return res.json(existing);
+    }
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error(err.message);
-    res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error' });
   } finally {
     client.release();
   }
+
+  // Already registered earlier: return it, and don't send a second SMS
+  if (result.replayed) return res.json(result);
+
+  if (result.patient.phone_number) {
+    deliver({
+      tokenId: result.token.id,
+      kind: 'registered',
+      phone: result.patient.phone_number,
+      message: registrationMessage({
+        token_number: result.token.token_number,
+        service_point: result.service_point,
+        patients_ahead: result.ewt.patients_ahead,
+        ewt_minutes: result.ewt.ewt_minutes,
+      }),
+    }).catch(console.error);
+  }
+
+  res.status(201).json(result);
 };
 
 const getServicePoints = async (req, res) => {

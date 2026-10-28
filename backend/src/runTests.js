@@ -6,6 +6,7 @@ const scripts = [
   ['Skip and re-queue', 'testSkip.js'],
   ['Token timeline', 'testTimeline.js'],
   ['CSV export', 'testExport.js'],
+  ['Offline sync', 'testOffline.js'],
 ];
 
 const report = [];

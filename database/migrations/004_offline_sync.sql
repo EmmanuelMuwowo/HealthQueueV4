@@ -1,0 +1,1 @@
+ALTER TABLE visits ADD COLUMN client_ref UUID UNIQUE;

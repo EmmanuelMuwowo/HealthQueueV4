@@ -3,6 +3,22 @@ const { computeEWT } = require('./queueService');
 const httpError = (status, message) =>
   Object.assign(new Error(message), { status });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_OFFLINE_AGE_MS = 12 * 60 * 60 * 1000;
+const lusakaDate = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lusaka' });
+
+// A registration captured offline keeps its real arrival time, within limits.
+// Anything implausible (future, too old, another day) falls back to server time.
+const resolveArrival = (captured_at) => {
+  if (!captured_at) return null;
+  const t = new Date(captured_at);
+  if (Number.isNaN(t.getTime())) return null;
+  const age = Date.now() - t.getTime();
+  if (age < -60000 || age > MAX_OFFLINE_AGE_MS) return null;
+  if (lusakaDate(t) !== lusakaDate(new Date())) return null;
+  return t.toISOString();
+};
+
 // Same person = same phone AND same name (families often share one phone)
 const findOrCreatePatient = async (client, { full_name, phone_number, date_of_birth, gender }) => {
   if (phone_number) {
@@ -22,12 +38,39 @@ const findOrCreatePatient = async (client, { full_name, phone_number, date_of_bi
   return created.rows[0];
 };
 
+// Rebuilds the response for a registration that was already saved
+const getResultByClientRef = async (db, clientRef) => {
+  const v = await db.query('SELECT * FROM visits WHERE client_ref = $1', [clientRef]);
+  const visit = v.rows[0];
+  if (!visit) return null;
+  const t = await db.query('SELECT * FROM queue_tokens WHERE visit_id = $1', [visit.id]);
+  const p = await db.query('SELECT * FROM patients WHERE id = $1', [visit.patient_id]);
+  const sp = await db.query('SELECT name FROM service_points WHERE id = $1', [visit.service_point_id]);
+  const token = t.rows[0];
+  return {
+    patient: p.rows[0],
+    visit,
+    token,
+    service_point: sp.rows[0]?.name,
+    ewt: await computeEWT(db, token),
+    replayed: true,
+  };
+};
+
 // Runs inside the caller's transaction (the caller does BEGIN / COMMIT / ROLLBACK)
 const createVisitAndToken = async (client, input, staffId) => {
   const {
     patient_id, full_name, phone_number, date_of_birth, gender,
     service_point_id, visit_type, reason, priority, appointment_id,
+    client_ref, captured_at,
   } = input;
+
+  // Offline sync: the same registration sent twice returns the first result
+  if (client_ref) {
+    if (!UUID_RE.test(client_ref)) throw httpError(400, 'Invalid client_ref');
+    const existing = await getResultByClientRef(client, client_ref);
+    if (existing) return existing;
+  }
 
   const sp = await client.query(
     'SELECT * FROM service_points WHERE id = $1 AND is_active = TRUE',
@@ -62,9 +105,11 @@ const createVisitAndToken = async (client, input, staffId) => {
   }
 
   const visit = await client.query(
-    `INSERT INTO visits (patient_id, service_point_id, visit_type, reason, registered_by, appointment_id)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [patient.id, service_point_id, visit_type || 'walk_in', reason || null, staffId, appointment_id || null]
+    `INSERT INTO visits
+       (patient_id, service_point_id, visit_type, reason, registered_by, appointment_id, client_ref)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [patient.id, service_point_id, visit_type || 'walk_in', reason || null, staffId,
+     appointment_id || null, client_ref || null]
   );
 
   // Next sequence number (safe under concurrent registrations)
@@ -80,17 +125,21 @@ const createVisitAndToken = async (client, input, staffId) => {
   const tokenNumber = `${sp.rows[0].code}-${String(seq).padStart(3, '0')}`;
 
   const tokenRes = await client.query(
-    `INSERT INTO queue_tokens (visit_id, service_point_id, sequence_no, token_number, priority)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [visit.rows[0].id, service_point_id, seq, tokenNumber, priority === 'urgent' ? 'urgent' : 'normal']
+    `INSERT INTO queue_tokens
+       (visit_id, service_point_id, sequence_no, token_number, priority, arrival_time)
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, NOW()))
+     RETURNING *`,
+    [visit.rows[0].id, service_point_id, seq, tokenNumber,
+     priority === 'urgent' ? 'urgent' : 'normal', resolveArrival(captured_at)]
   );
   const token = tokenRes.rows[0];
 
   // EventLog: raw source for analytics
   await client.query(
-    `INSERT INTO event_log (token_id, visit_id, service_point_id, event_type, event_time, actor_id)
-     VALUES ($1, $2, $3, 'arrived', $4, $5)`,
-    [token.id, visit.rows[0].id, service_point_id, token.arrival_time, staffId]
+    `INSERT INTO event_log (token_id, visit_id, service_point_id, event_type, event_time, actor_id, metadata)
+     VALUES ($1, $2, $3, 'arrived', $4, $5, $6)`,
+    [token.id, visit.rows[0].id, service_point_id, token.arrival_time, staffId,
+     client_ref ? JSON.stringify({ synced_offline: true }) : null]
   );
 
   const ewt = await computeEWT(client, token);
@@ -98,4 +147,4 @@ const createVisitAndToken = async (client, input, staffId) => {
   return { patient, visit: visit.rows[0], token, service_point: sp.rows[0].name, ewt };
 };
 
-module.exports = { httpError, findOrCreatePatient, createVisitAndToken };
+module.exports = { httpError, findOrCreatePatient, getResultByClientRef, createVisitAndToken };
