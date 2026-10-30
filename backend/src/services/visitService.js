@@ -19,6 +19,29 @@ const resolveArrival = (captured_at) => {
   return t.toISOString();
 };
 
+// The visit category must belong to the chosen service point.
+// No category given: use that service point's default.
+const resolveCategory = async (client, servicePointId, categoryId) => {
+  if (categoryId) {
+    const r = await client.query(
+      `SELECT * FROM visit_categories
+       WHERE id = $1 AND service_point_id = $2 AND is_active = TRUE`,
+      [categoryId, servicePointId]
+    );
+    if (!r.rows[0]) throw httpError(400, 'That visit type does not belong to this service point');
+    return r.rows[0];
+  }
+  const d = await client.query(
+    `SELECT * FROM visit_categories
+     WHERE service_point_id = $1 AND is_default = TRUE AND is_active = TRUE`,
+    [servicePointId]
+  );
+  return d.rows[0] || null;
+};
+
+const categorySummary = (c) =>
+  (c ? { id: c.id, code: c.code, name: c.name, default_minutes: parseFloat(c.default_minutes) } : null);
+
 // Same person = same phone AND same name (families often share one phone).
 // The phone is optional, but if given it must be a valid Zambian mobile number.
 const findOrCreatePatient = async (client, { full_name, phone_number, date_of_birth, gender }) => {
@@ -55,12 +78,16 @@ const getResultByClientRef = async (db, clientRef) => {
   const t = await db.query('SELECT * FROM queue_tokens WHERE visit_id = $1', [visit.id]);
   const p = await db.query('SELECT * FROM patients WHERE id = $1', [visit.patient_id]);
   const sp = await db.query('SELECT name FROM service_points WHERE id = $1', [visit.service_point_id]);
+  const c = visit.category_id
+    ? await db.query('SELECT * FROM visit_categories WHERE id = $1', [visit.category_id])
+    : { rows: [] };
   const token = t.rows[0];
   return {
     patient: p.rows[0],
     visit,
     token,
     service_point: sp.rows[0]?.name,
+    category: categorySummary(c.rows[0]),
     ewt: await computeEWT(db, token),
     replayed: true,
   };
@@ -71,7 +98,7 @@ const createVisitAndToken = async (client, input, staffId) => {
   const {
     patient_id, full_name, phone_number, date_of_birth, gender,
     service_point_id, visit_type, reason, priority, appointment_id,
-    client_ref, captured_at,
+    client_ref, captured_at, category_id,
   } = input;
 
   // Offline sync: the same registration sent twice returns the first result
@@ -86,6 +113,8 @@ const createVisitAndToken = async (client, input, staffId) => {
     [service_point_id]
   );
   if (sp.rows.length === 0) throw httpError(400, 'Invalid service point');
+
+  const category = await resolveCategory(client, service_point_id, category_id);
 
   let patient;
   if (patient_id) {
@@ -122,10 +151,11 @@ const createVisitAndToken = async (client, input, staffId) => {
 
   const visit = await client.query(
     `INSERT INTO visits
-       (patient_id, service_point_id, visit_type, reason, registered_by, appointment_id, client_ref)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+       (patient_id, service_point_id, visit_type, reason, registered_by,
+        appointment_id, client_ref, category_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
     [patient.id, service_point_id, visit_type || 'walk_in', reason || null, staffId,
-     appointment_id || null, client_ref || null]
+     appointment_id || null, client_ref || null, category ? category.id : null]
   );
 
   // Next sequence number (safe under concurrent registrations)
@@ -170,8 +200,11 @@ const createVisitAndToken = async (client, input, staffId) => {
     visit: visit.rows[0],
     token,
     service_point: sp.rows[0].name,
+    category: categorySummary(category),
     ewt,
   };
 };
 
-module.exports = { httpError, findOrCreatePatient, getResultByClientRef, createVisitAndToken };
+module.exports = {
+  httpError, resolveCategory, findOrCreatePatient, getResultByClientRef, createVisitAndToken,
+};

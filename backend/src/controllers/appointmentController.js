@@ -1,5 +1,7 @@
 const pool = require('../db');
-const { httpError, findOrCreatePatient, createVisitAndToken } = require('../services/visitService');
+const {
+  httpError, resolveCategory, findOrCreatePatient, createVisitAndToken,
+} = require('../services/visitService');
 const { deliver, registrationMessage } = require('../services/smsService');
 
 const TZ = 'Africa/Lusaka';
@@ -8,7 +10,7 @@ const TZ = 'Africa/Lusaka';
 const bookAppointment = async (req, res) => {
   const {
     full_name, phone_number, date_of_birth, gender,
-    service_point_id, scheduled_at, reason,
+    service_point_id, scheduled_at, reason, category_id,
   } = req.body;
 
   if (!full_name || !service_point_id || !scheduled_at) {
@@ -32,6 +34,8 @@ const bookAppointment = async (req, res) => {
     );
     if (sp.rows.length === 0) throw httpError(400, 'Invalid service point');
 
+    const category = await resolveCategory(client, service_point_id, category_id);
+
     const patient = await findOrCreatePatient(client, {
       full_name, phone_number, date_of_birth, gender,
     });
@@ -49,9 +53,11 @@ const bookAppointment = async (req, res) => {
     }
 
     const created = await client.query(
-      `INSERT INTO appointments (patient_id, service_point_id, scheduled_at, reason, created_by)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [patient.id, service_point_id, when.toISOString(), reason || null, req.staff.id]
+      `INSERT INTO appointments
+         (patient_id, service_point_id, scheduled_at, reason, created_by, category_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [patient.id, service_point_id, when.toISOString(), reason || null, req.staff.id,
+       category ? category.id : null]
     );
 
     await client.query('COMMIT');
@@ -73,10 +79,12 @@ const listAppointments = async (req, res) => {
     const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
 
     const result = await pool.query(
-      `SELECT a.*, p.full_name, p.phone_number, sp.name AS service_point_name
+      `SELECT a.*, p.full_name, p.phone_number, sp.name AS service_point_name,
+              vc.name AS category_name
        FROM appointments a
        JOIN patients p ON p.id = a.patient_id
        JOIN service_points sp ON sp.id = a.service_point_id
+       LEFT JOIN visit_categories vc ON vc.id = a.category_id
        WHERE (a.scheduled_at AT TIME ZONE '${TZ}')::date
            = COALESCE($1::date, (NOW() AT TIME ZONE '${TZ}')::date)
          AND ($2::int IS NULL OR a.service_point_id = $2)
@@ -140,6 +148,7 @@ const checkIn = async (req, res) => {
         visit_type: 'appointment',
         reason: appt.reason,
         appointment_id: appt.id,
+        category_id: appt.category_id,
       },
       req.staff.id
     );
@@ -147,7 +156,8 @@ const checkIn = async (req, res) => {
     await client.query(`UPDATE appointments SET status = 'checked_in' WHERE id = $1`, [id]);
 
     await client.query('COMMIT');
-        // SMS goes out after the commit and can never block or break registration
+
+    // SMS goes out after the commit and can never block or break check-in
     if (result.patient.phone_number) {
       deliver({
         tokenId: result.token.id,
@@ -161,6 +171,7 @@ const checkIn = async (req, res) => {
         }),
       }).catch(console.error);
     }
+
     res.status(201).json({ ...result, appointment_id: id });
   } catch (err) {
     await client.query('ROLLBACK');

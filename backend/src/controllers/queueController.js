@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { getAverageServiceMinutes } = require('../services/queueService');
+const { getAverageServiceMinutes, estimateWait } = require('../services/queueService');
 const { deliver, calledMessage } = require('../services/smsService');
 
 // Clinicians can only touch their own service point
@@ -30,10 +30,11 @@ const getQueue = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT qt.*, p.full_name, p.phone_number
+      `SELECT qt.*, p.full_name, p.phone_number, vc.name AS category_name
        FROM queue_tokens qt
        JOIN visits v ON v.id = qt.visit_id
        JOIN patients p ON p.id = v.patient_id
+       LEFT JOIN visit_categories vc ON vc.id = v.category_id
        WHERE qt.service_point_id = $1
          AND qt.queue_date = CURRENT_DATE
          AND qt.status IN ('waiting', 'called', 'in_consultation')
@@ -61,10 +62,13 @@ const getQueue = async (req, res) => {
     );
 
     // EWT = patients ahead x average service duration
+    const inConsult = active.find((t) => t.status === 'in_consultation');
     const waiting = waitingRaw.map((t, i) => {
       const ahead = active.length + i;
-      return { ...t, patients_ahead: ahead, ewt_minutes: Math.round(ahead * avg) };
+      const est = estimateWait({ ahead, avg, consultationStart: inConsult?.consultation_start });
+      return { ...t, patients_ahead: ahead, ewt_minutes: Math.round(est.ewt) };
     });
+    const current = estimateWait({ ahead: 1, avg, consultationStart: inConsult?.consultation_start });
 
     res.json({
       service_point: sp.rows[0],
@@ -73,6 +77,8 @@ const getQueue = async (req, res) => {
       skipped: skippedRes.rows,
       avg_service_minutes: Math.round(avg * 10) / 10,
       avg_source: source,
+      current_elapsed_minutes: current.elapsed === null ? null : Math.round(current.elapsed * 10) / 10,
+      current_remaining_minutes: current.remaining === null ? null : Math.round(current.remaining * 10) / 10,
     });
   } catch (err) {
     console.error(err.message);

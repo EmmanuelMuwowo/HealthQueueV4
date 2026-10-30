@@ -200,9 +200,13 @@ export default function Clinic() {
         )}
 
         <div style={S.note}>
-          EWT = patients ahead × {queue.avg_service_minutes} min
+          EWT = time left in the current consultation + patients ahead × {queue.avg_service_minutes} min
           ({queue.avg_source === 'default' ? 'default average' : 'rolling average of recent visits'})
-          · refreshes every 3 seconds
+          {queue.current_elapsed_minutes !== null && queue.current_elapsed_minutes !== undefined && (
+            <> · current consultation {queue.current_elapsed_minutes} min so far,
+              about {queue.current_remaining_minutes} min left</>
+          )}
+          {' · '}refreshes every 3 seconds
         </div>
       </div>
     </div>

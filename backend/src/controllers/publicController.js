@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { getAverageServiceMinutes } = require('../services/queueService');
+const { getAverageServiceMinutes, estimateWait } = require('../services/queueService');
 
 // GET /api/public/queue : no login, no patient names
 const getPublicQueue = async (req, res) => {
@@ -11,7 +11,7 @@ const getPublicQueue = async (req, res) => {
     const servicePoints = [];
     for (const sp of sps.rows) {
       const tokens = await pool.query(
-        `SELECT token_number, priority, status
+        `SELECT token_number, priority, status, consultation_start
          FROM queue_tokens
          WHERE service_point_id = $1
            AND queue_date = CURRENT_DATE
@@ -38,7 +38,11 @@ const getPublicQueue = async (req, res) => {
         waiting: waitingRaw.slice(0, 8).map((t, i) => ({
           token_number: t.token_number,
           priority: t.priority,
-          ewt_minutes: Math.round((active.length + i) * avg),
+          ewt_minutes: Math.round(estimateWait({
+            ahead: active.length + i,
+            avg,
+            consultationStart: active.find((x) => x.status === 'in_consultation')?.consultation_start,
+          }).ewt),
         })),
       });
     }

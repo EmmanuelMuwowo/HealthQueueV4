@@ -9,6 +9,7 @@ const scripts = [
   ['CSV export', 'testExport.js'],
   ['Offline sync', 'testOffline.js'],
   ['Patients and phones', 'testPatients.js'],
+    ['Visit categories', 'testCategories.js'],
 ];
 
 const report = [];
