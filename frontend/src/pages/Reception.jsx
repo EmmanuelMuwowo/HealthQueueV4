@@ -3,6 +3,7 @@ import api from '../services/api';
 import TopBar from '../components/TopBar';
 import ReceptionNav from '../components/ReceptionNav';
 import { newRef, addPending, getPending, removePending, syncPending } from '../services/offlineQueue';
+import { normalizePhone } from '../utils/phone';
 
 const S = {
   page: {
@@ -23,6 +24,7 @@ const S = {
     width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #E5E5EA',
     fontSize: 15, backgroundColor: '#FAFAFA', outline: 'none', marginBottom: 14,
   },
+  hint: { fontSize: 12, color: '#FF3B30', margin: '-8px 0 14px' },
   row: { display: 'flex', gap: 12, marginTop: 4 },
   primary: {
     flex: 1, padding: 13, backgroundColor: '#007AFF', color: '#fff', border: 'none',
@@ -36,6 +38,27 @@ const S = {
     color: '#FF3B30', fontSize: 13, backgroundColor: '#FFF2F2',
     padding: '10px 12px', borderRadius: 8, marginBottom: 14,
   },
+  searchBox: {
+    backgroundColor: '#F2F2F7', borderRadius: 12, padding: 14, marginBottom: 18,
+  },
+  result: {
+    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10,
+    backgroundColor: '#fff', marginTop: 6, cursor: 'pointer', fontSize: 14,
+    border: '1px solid #E5E5EA',
+  },
+  muted: { fontSize: 12, color: '#8E8E93' },
+  selected: {
+    backgroundColor: '#EAF3FF', borderRadius: 12, padding: '14px 16px', marginBottom: 14,
+  },
+  linkBtn: {
+    border: 'none', background: 'none', color: '#007AFF', fontSize: 13,
+    fontWeight: 600, cursor: 'pointer', padding: 0,
+  },
+  badge: (returning) => ({
+    display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+    backgroundColor: returning ? '#E8F8F2' : '#FFF3CD',
+    color: returning ? '#1A7A5E' : '#856404', marginBottom: 12,
+  }),
   empty: { color: '#8E8E93', fontSize: 15, textAlign: 'center', padding: '60px 0' },
   tokenBox: {
     background: 'linear-gradient(135deg, #007AFF 0%, #0055D4 100%)', borderRadius: 16,
@@ -75,6 +98,10 @@ const clock = (iso) =>
   new Date(iso).toLocaleTimeString('en-GB', {
     hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lusaka',
   });
+const day = (iso) =>
+  new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Lusaka',
+  });
 const shortRef = (ref) => ref.slice(0, 8).toUpperCase();
 
 export default function Reception() {
@@ -82,6 +109,10 @@ export default function Reception() {
   const [form, setForm] = useState({
     full_name: '', phone_number: '', gender: '', service_point_id: '', reason: '',
   });
+  const [query, setQuery] = useState('');
+  const [matches, setMatches] = useState([]);
+  const [searchMsg, setSearchMsg] = useState('');
+  const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [savedOffline, setSavedOffline] = useState(null);
   const [pending, setPending] = useState(getPending());
@@ -89,14 +120,47 @@ export default function Reception() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Service points, with an offline copy (the list is not sensitive)
   useEffect(() => {
-    api.get('/visits/service-points').then((res) => {
-      setServicePoints(res.data);
-      if (res.data.length > 0) {
-        setForm((f) => ({ ...f, service_point_id: f.service_point_id || String(res.data[0].id) }));
+    const apply = (list) => {
+      setServicePoints(list);
+      if (list.length > 0) {
+        setForm((f) => ({ ...f, service_point_id: f.service_point_id || String(list[0].id) }));
       }
-    }).catch(() => setError('Could not load service points. Is the backend running?'));
+    };
+    api.get('/visits/service-points')
+      .then((res) => {
+        localStorage.setItem('hq-service-points', JSON.stringify(res.data));
+        apply(res.data);
+      })
+      .catch(() => {
+        let saved = [];
+        try { saved = JSON.parse(localStorage.getItem('hq-service-points') || '[]'); } catch { /* ignore */ }
+        if (saved.length > 0) apply(saved);
+        else setError('Could not load service points. Is the backend running?');
+      });
   }, []);
+
+  // Patient search, 300 ms after the receptionist stops typing
+  useEffect(() => {
+    if (selected || query.trim().length < 3) {
+      setMatches([]);
+      setSearchMsg('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      api.get('/patients/search', { params: { q: query.trim() } })
+        .then((res) => {
+          setMatches(res.data);
+          setSearchMsg(res.data.length === 0 ? 'No matching patient. Register them as new below.' : '');
+        })
+        .catch((err) => {
+          setMatches([]);
+          setSearchMsg(err.response ? 'Search failed.' : 'Search needs a connection. Register as new for now.');
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, selected]);
 
   const runSync = useCallback(async () => {
     const done = await syncPending();
@@ -121,7 +185,7 @@ export default function Reception() {
     };
   }, [runSync]);
 
-    // When the patient on the grey card syncs, show their real token instead
+  // When the patient on the grey card syncs, show their real token instead
   useEffect(() => {
     if (!savedOffline) return;
     const match = synced.find((r) => r.visit.client_ref === savedOffline.client_ref);
@@ -132,11 +196,29 @@ export default function Reception() {
   }, [synced, savedOffline]);
 
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
-  const clearForm = () => setForm({ ...form, full_name: '', phone_number: '', gender: '', reason: '' });
+
+  const choosePatient = (p) => {
+    setSelected(p);
+    setQuery('');
+    setMatches([]);
+    setError('');
+  };
+
+  const resetPatient = () => {
+    setSelected(null);
+    setForm({ ...form, full_name: '', phone_number: '', gender: '', reason: '' });
+  };
+
+  const phoneTyped = form.phone_number.trim() !== '';
+  const phoneInvalid = !selected && phoneTyped && !normalizePhone(form.phone_number);
 
   const submit = async (priority) => {
-    if (!form.full_name.trim()) {
+    if (!selected && !form.full_name.trim()) {
       setError('Patient full name is required.');
+      return;
+    }
+    if (phoneInvalid) {
+      setError('Check the phone number. Use a Zambian mobile number such as 0977123456.');
       return;
     }
     setLoading(true);
@@ -145,28 +227,31 @@ export default function Reception() {
 
     const sp = servicePoints.find((s) => String(s.id) === String(form.service_point_id));
     const body = {
-      full_name: form.full_name,
-      phone_number: form.phone_number,
-      gender: form.gender,
+      ...(selected
+        ? { patient_id: selected.id, full_name: selected.full_name }
+        : {
+            full_name: form.full_name,
+            phone_number: phoneTyped ? normalizePhone(form.phone_number) : '',
+            gender: form.gender,
+          }),
       reason: form.reason,
       service_point_id: parseInt(form.service_point_id),
       priority,
-      client_ref: newRef(),                 // lets the server ignore a repeat
-      captured_at: new Date().toISOString(), // the real arrival time
+      client_ref: newRef(),
+      captured_at: new Date().toISOString(),
     };
 
     try {
       const res = await api.post('/visits', body);
       setResult(res.data);
-      clearForm();
+      resetPatient();
     } catch (err) {
       setResult(null);
       if (!err.response) {
-        // No reply from the server: keep it on this device and sync later
         const item = { ...body, service_point_name: sp?.name || 'Unknown service point' };
         addPending(item);
         setSavedOffline(item);
-        clearForm();
+        resetPatient();
       } else {
         setError(err.response.data?.error || 'Could not register the patient.');
       }
@@ -174,6 +259,8 @@ export default function Reception() {
       setLoading(false);
     }
   };
+
+  const history = result?.patient_history;
 
   return (
     <div style={S.page}>
@@ -184,19 +271,62 @@ export default function Reception() {
           <h2 style={S.h2}>Register walk-in patient</h2>
           {error && <div style={S.error}>{error}</div>}
 
-          <label style={S.label}>Full name *</label>
-          <input style={S.input} value={form.full_name} onChange={update('full_name')} />
+          {!selected && (
+            <div style={S.searchBox}>
+              <label style={S.label}>Find returning patient (phone or name)</label>
+              <input style={{ ...S.input, marginBottom: 0, backgroundColor: '#fff' }}
+                value={query} placeholder="e.g. 0977 or Banda"
+                onChange={(e) => setQuery(e.target.value)} />
+              {matches.map((p) => (
+                <div key={p.id} style={S.result} onClick={() => choosePatient(p)}>
+                  <div style={{ flex: 1 }}>
+                    <strong>{p.full_name}</strong>
+                    <div style={S.muted}>
+                      {p.phone_number || 'No phone'} · {p.visit_count} visit{p.visit_count === 1 ? '' : 's'}
+                      {p.last_visit ? ` · last ${day(p.last_visit)}` : ''}
+                    </div>
+                  </div>
+                  <span style={{ color: '#007AFF', fontWeight: 600 }}>Select</span>
+                </div>
+              ))}
+              {searchMsg && <div style={{ ...S.muted, marginTop: 8 }}>{searchMsg}</div>}
+            </div>
+          )}
 
-          <label style={S.label}>Phone number</label>
-          <input style={S.input} value={form.phone_number} onChange={update('phone_number')} />
+          {selected ? (
+            <div style={S.selected}>
+              <div style={S.badge(true)}>Returning patient</div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>{selected.full_name}</div>
+              <div style={S.muted}>
+                {selected.phone_number || 'No phone'} · {selected.visit_count} previous visit
+                {selected.visit_count === 1 ? '' : 's'}
+                {selected.last_visit ? ` · last ${day(selected.last_visit)}` : ''}
+              </div>
+              <button style={{ ...S.linkBtn, marginTop: 8 }} onClick={resetPatient}>
+                Not this patient? Register someone new
+              </button>
+            </div>
+          ) : (
+            <>
+              <label style={S.label}>Full name *</label>
+              <input style={S.input} value={form.full_name} onChange={update('full_name')} />
 
-          <label style={S.label}>Gender</label>
-          <select style={S.input} value={form.gender} onChange={update('gender')}>
-            <option value="">Select</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
+              <label style={S.label}>Phone number</label>
+              <input style={S.input} value={form.phone_number} placeholder="0977123456"
+                onChange={update('phone_number')} />
+              {phoneInvalid && (
+                <div style={S.hint}>Use a Zambian mobile number: 10 digits starting 095, 096, 097, 075, 076 or 077.</div>
+              )}
+
+              <label style={S.label}>Gender</label>
+              <select style={S.input} value={form.gender} onChange={update('gender')}>
+                <option value="">Select</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </>
+          )}
 
           <label style={S.label}>Service point</label>
           <select style={S.input} value={form.service_point_id} onChange={update('service_point_id')}>
@@ -237,6 +367,13 @@ export default function Reception() {
             <div style={S.empty}>Register a patient to generate a token.</div>
           ) : (
             <>
+              {history && (
+                <div style={S.badge(history.status === 'returning')}>
+                  {history.status === 'returning'
+                    ? `Returning patient · ${history.previous_visits} previous visit${history.previous_visits === 1 ? '' : 's'}`
+                    : 'New patient · first visit'}
+                </div>
+              )}
               <div style={S.tokenBox}>
                 <div style={S.tokenLabel}>{result.service_point} · {result.token.status}</div>
                 <div style={S.tokenNum}>{result.token.token_number}</div>

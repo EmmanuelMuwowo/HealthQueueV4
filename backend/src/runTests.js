@@ -8,6 +8,7 @@ const scripts = [
   ['Token timeline', 'testTimeline.js'],
   ['CSV export', 'testExport.js'],
   ['Offline sync', 'testOffline.js'],
+  ['Patients and phones', 'testPatients.js'],
 ];
 
 const report = [];

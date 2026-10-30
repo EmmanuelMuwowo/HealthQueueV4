@@ -1,4 +1,5 @@
 const { computeEWT } = require('./queueService');
+const { normalizePhone } = require('../utils/phone');
 
 const httpError = (status, message) =>
   Object.assign(new Error(message), { status });
@@ -8,7 +9,6 @@ const MAX_OFFLINE_AGE_MS = 12 * 60 * 60 * 1000;
 const lusakaDate = (d) => d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lusaka' });
 
 // A registration captured offline keeps its real arrival time, within limits.
-// Anything implausible (future, too old, another day) falls back to server time.
 const resolveArrival = (captured_at) => {
   if (!captured_at) return null;
   const t = new Date(captured_at);
@@ -19,21 +19,30 @@ const resolveArrival = (captured_at) => {
   return t.toISOString();
 };
 
-// Same person = same phone AND same name (families often share one phone)
+// Same person = same phone AND same name (families often share one phone).
+// The phone is optional, but if given it must be a valid Zambian mobile number.
 const findOrCreatePatient = async (client, { full_name, phone_number, date_of_birth, gender }) => {
-  if (phone_number) {
+  let phone = null;
+  if (phone_number && String(phone_number).trim()) {
+    phone = normalizePhone(phone_number);
+    if (!phone) {
+      throw httpError(400, 'Invalid phone number. Use a Zambian mobile number such as 0977123456.');
+    }
+  }
+
+  if (phone) {
     const found = await client.query(
       `SELECT * FROM patients
        WHERE phone_number = $1 AND LOWER(TRIM(full_name)) = LOWER(TRIM($2))
        ORDER BY id LIMIT 1`,
-      [phone_number, full_name]
+      [phone, full_name]
     );
     if (found.rows[0]) return found.rows[0];
   }
   const created = await client.query(
     `INSERT INTO patients (full_name, phone_number, date_of_birth, gender)
      VALUES ($1, $2, $3, $4) RETURNING *`,
-    [full_name, phone_number || null, date_of_birth || null, gender || null]
+    [full_name, phone, date_of_birth || null, gender || null]
   );
   return created.rows[0];
 };
@@ -86,6 +95,13 @@ const createVisitAndToken = async (client, input, staffId) => {
   } else {
     patient = await findOrCreatePatient(client, { full_name, phone_number, date_of_birth, gender });
   }
+
+  // New or returning: counted before this visit is added
+  const history = await client.query(
+    'SELECT COUNT(*)::int AS n, MAX(created_at) AS last FROM visits WHERE patient_id = $1',
+    [patient.id]
+  );
+  const previousVisits = history.rows[0].n;
 
   // Guard: one active token per patient per service point
   const duplicate = await client.query(
@@ -144,7 +160,18 @@ const createVisitAndToken = async (client, input, staffId) => {
 
   const ewt = await computeEWT(client, token);
 
-  return { patient, visit: visit.rows[0], token, service_point: sp.rows[0].name, ewt };
+  return {
+    patient,
+    patient_history: {
+      status: previousVisits > 0 ? 'returning' : 'new',
+      previous_visits: previousVisits,
+      last_visit: history.rows[0].last,
+    },
+    visit: visit.rows[0],
+    token,
+    service_point: sp.rows[0].name,
+    ewt,
+  };
 };
 
 module.exports = { httpError, findOrCreatePatient, getResultByClientRef, createVisitAndToken };
