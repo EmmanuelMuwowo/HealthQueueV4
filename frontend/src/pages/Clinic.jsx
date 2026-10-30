@@ -138,6 +138,9 @@ export default function Clinic() {
             <div style={S.heroLabel}>Now serving</div>
             <div style={S.heroToken}>{current.token_number}</div>
             <div style={{ fontSize: 18 }}>{current.full_name}</div>
+            {current.category_name && (
+              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 2 }}>{current.category_name}</div>
+            )}
             <div style={S.heroActions}>
               {current.status === 'called' ? (
                 <button style={S.heroBtn} disabled={busy}
@@ -174,7 +177,12 @@ export default function Clinic() {
           queue.waiting.map((t) => (
             <div key={t.id} style={S.row}>
               <div style={S.rowToken}>{t.token_number}</div>
-              <div style={S.rowName}>{t.full_name}</div>
+                <div style={S.rowName}>
+                {t.full_name}
+                {t.category_name && (
+                  <div style={{ fontSize: 12, color: '#8E8E93', fontWeight: 400 }}>{t.category_name}</div>
+                )}
+              </div>
               {t.priority === 'urgent' && <span style={S.urgentBadge}>URGENT</span>}
               <div style={S.ewt}>{t.patients_ahead} ahead · {t.ewt_minutes} min</div>
             </div>

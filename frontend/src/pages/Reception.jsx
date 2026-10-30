@@ -107,7 +107,7 @@ const shortRef = (ref) => ref.slice(0, 8).toUpperCase();
 export default function Reception() {
   const [servicePoints, setServicePoints] = useState([]);
   const [form, setForm] = useState({
-    full_name: '', phone_number: '', gender: '', service_point_id: '', reason: '',
+    full_name: '', phone_number: '', gender: '', service_point_id: '', reason: '', category_id: '',
   });
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState([]);
@@ -119,6 +119,7 @@ export default function Reception() {
   const [synced, setSynced] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
 
   // Service points, with an offline copy (the list is not sensitive)
   useEffect(() => {
@@ -140,6 +141,31 @@ export default function Reception() {
         else setError('Could not load service points. Is the backend running?');
       });
   }, []);
+
+    // Visit types, with an offline copy (not sensitive)
+  useEffect(() => {
+    api.get('/visits/categories')
+      .then((res) => {
+        localStorage.setItem('hq-categories', JSON.stringify(res.data));
+        setCategories(res.data);
+      })
+      .catch(() => {
+        try { setCategories(JSON.parse(localStorage.getItem('hq-categories') || '[]')); } catch { /* ignore */ }
+      });
+  }, []);
+
+  const spCategories = categories.filter(
+    (c) => String(c.service_point_id) === String(form.service_point_id)
+  );
+
+  // When the service point changes, pick its usual visit type
+  useEffect(() => {
+    if (spCategories.length === 0) return;
+    if (!spCategories.some((c) => String(c.id) === String(form.category_id))) {
+      const def = spCategories.find((c) => c.is_default) || spCategories[0];
+      setForm((f) => ({ ...f, category_id: String(def.id) }));
+    }
+  }, [form.service_point_id, categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Patient search, 300 ms after the receptionist stops typing
   useEffect(() => {
@@ -236,6 +262,7 @@ export default function Reception() {
           }),
       reason: form.reason,
       service_point_id: parseInt(form.service_point_id),
+      category_id: form.category_id ? parseInt(form.category_id) : undefined,
       priority,
       client_ref: newRef(),
       captured_at: new Date().toISOString(),
@@ -335,6 +362,13 @@ export default function Reception() {
             ))}
           </select>
 
+          <label style={S.label}>Visit type</label>
+          <select style={S.input} value={form.category_id} onChange={update('category_id')}>
+            {spCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
           <label style={S.label}>Reason for visit (optional)</label>
           <input style={S.input} value={form.reason} onChange={update('reason')} />
 
@@ -375,7 +409,9 @@ export default function Reception() {
                 </div>
               )}
               <div style={S.tokenBox}>
-                <div style={S.tokenLabel}>{result.service_point} · {result.token.status}</div>
+                <div style={S.tokenLabel}>
+                  {result.service_point}{result.category ? ` · ${result.category.name}` : ''} · {result.token.status}
+                </div>
                 <div style={S.tokenNum}>{result.token.token_number}</div>
                 <div style={{ fontSize: 16 }}>{result.patient.full_name}</div>
                 <div style={{ fontSize: 13, opacity: 0.8 }}>

@@ -75,9 +75,10 @@ const statusLabel = (s) => s.replace('_', ' ');
 export default function Appointments() {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
   const [servicePoints, setServicePoints] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [form, setForm] = useState({
     full_name: '', phone_number: '', gender: '', service_point_id: '',
-    date: today, time: '', reason: '',
+    date: today, time: '', reason: '', category_id: '',
   });
   const [listDate, setListDate] = useState(today);
   const [list, setList] = useState([]);
@@ -86,7 +87,8 @@ export default function Appointments() {
   const [checkedIn, setCheckedIn] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+
+   useEffect(() => {
     api.get('/visits/service-points').then((res) => {
       setServicePoints(res.data);
       if (res.data.length > 0) {
@@ -94,6 +96,31 @@ export default function Appointments() {
       }
     }).catch(() => setError('Could not load service points.'));
   }, []);
+
+  // Visit types, with an offline copy (not sensitive)
+  useEffect(() => {
+    api.get('/visits/categories')
+      .then((res) => {
+        localStorage.setItem('hq-categories', JSON.stringify(res.data));
+        setCategories(res.data);
+      })
+      .catch(() => {
+        try { setCategories(JSON.parse(localStorage.getItem('hq-categories') || '[]')); } catch { /* ignore */ }
+      });
+  }, []);
+
+  const spCategories = categories.filter(
+    (c) => String(c.service_point_id) === String(form.service_point_id)
+  );
+
+  // When the service point changes, pick its usual visit type
+  useEffect(() => {
+    if (spCategories.length === 0) return;
+    if (!spCategories.some((c) => String(c.id) === String(form.category_id))) {
+      const def = spCategories.find((c) => c.is_default) || spCategories[0];
+      setForm((f) => ({ ...f, category_id: String(def.id) }));
+    }
+  }, [form.service_point_id, categories]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = useCallback(() => {
     api.get('/appointments', { params: { date: listDate } })
@@ -194,6 +221,13 @@ export default function Appointments() {
             </div>
           </div>
 
+          <label style={S.label}>Visit type</label>
+          <select style={S.input} value={form.category_id} onChange={update('category_id')}>
+            {spCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
           <div style={S.twoCol}>
             <div style={{ flex: 1 }}>
               <label style={S.label}>Date *</label>
@@ -232,7 +266,8 @@ export default function Appointments() {
                   <span style={S.pill(a.status)}>{statusLabel(a.status)}</span>
                 </div>
                 <div style={S.sub}>
-                  {a.service_point_name}{a.phone_number ? ` · ${a.phone_number}` : ''}
+                  {a.service_point_name}{a.category_name ? ` · ${a.category_name}` : ''}
+                  {a.phone_number ? ` · ${a.phone_number}` : ''}
                   {a.reason ? ` · ${a.reason}` : ''}
                 </div>
                 {a.status === 'booked' && (
