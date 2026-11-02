@@ -68,7 +68,24 @@ const S = {
     padding: '7px 14px', backgroundColor: '#E3F2FD', color: '#1565C0', border: 'none',
     borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
   },
+  progressText: { fontSize: 14, fontWeight: 600, marginTop: 14 },
+  progressTrack: {
+    height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)',
+    marginTop: 6, overflow: 'hidden',
+  },
+  progressFill: (pct, over) => ({
+    height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4,
+    backgroundColor: over ? '#FF9500' : '#fff',
+  }),
+  ahtList: {
+    backgroundColor: '#fff', borderRadius: 12, padding: '12px 16px', marginTop: 24,
+    fontSize: 13, color: '#3C3C43', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  },
+  ahtRow: { display: 'flex', justifyContent: 'space-between', padding: '4px 0' },
 };
+
+const wait = (t) =>
+  t.ewt_low != null && t.ewt_high != null ? `${t.ewt_low}–${t.ewt_high} min` : `${t.ewt_minutes} min`;
 
 export default function Clinic() {
   const staff = JSON.parse(sessionStorage.getItem('staff') || '{}');
@@ -115,6 +132,17 @@ export default function Clinic() {
   }
 
   const current = queue.now_serving;
+
+  // How far the current consultation is through the typical time for its visit type
+  const typical = current
+    ? (queue.category_aht || []).find((c) => c.name === current.category_name)?.aht_minutes
+      ?? queue.avg_service_minutes
+    : null;
+  const elapsed = queue.current_elapsed_minutes;
+  const showProgress = current && current.status === 'in_consultation'
+    && elapsed !== null && elapsed !== undefined && typical;
+  const pct = showProgress ? (elapsed / typical) * 100 : 0;
+  const over = showProgress && elapsed > typical;
 
   return (
     <div style={S.page}>
@@ -165,6 +193,17 @@ export default function Clinic() {
               )}
               <span style={S.statusPill}>{current.status.replace('_', ' ')}</span>
             </div>
+            {showProgress && (
+              <>
+                <div style={S.progressText}>
+                  {Math.floor(elapsed)} of {Math.round(typical)} min typical
+                  {over ? ' · running over' : ''}
+                </div>
+                <div style={S.progressTrack}>
+                  <div style={S.progressFill(pct, over)} />
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div style={S.heroEmpty}>No patient called. Press "Call next" to begin.</div>
@@ -184,7 +223,7 @@ export default function Clinic() {
                 )}
               </div>
               {t.priority === 'urgent' && <span style={S.urgentBadge}>URGENT</span>}
-              <div style={S.ewt}>{t.patients_ahead} ahead · {t.ewt_minutes} min</div>
+              <div style={S.ewt}>{t.patients_ahead} ahead · {wait(t)}</div>
             </div>
           ))
         )}
@@ -207,14 +246,26 @@ export default function Clinic() {
           </>
         )}
 
+        {(queue.category_aht || []).length > 0 && (
+          <div style={S.ahtList}>
+            <div style={{ ...S.sectionLabel, marginBottom: 6 }}>Typical consultation time</div>
+            {queue.category_aht.map((c) => (
+              <div key={c.name} style={S.ahtRow}>
+                <span>{c.name}</span>
+                <span style={{ color: '#8E8E93' }}>
+                  {Math.round(c.aht_minutes)} min ·{' '}
+                  {c.source === 'ewma'
+                    ? `from ${c.sample_size} recent visit${c.sample_size === 1 ? '' : 's'}`
+                    : 'default (fewer than 3 recent visits)'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={S.note}>
-          EWT = time left in the current consultation + patients ahead × {queue.avg_service_minutes} min
-          ({queue.avg_source === 'default' ? 'default average' : 'rolling average of recent visits'})
-          {queue.current_elapsed_minutes !== null && queue.current_elapsed_minutes !== undefined && (
-            <> · current consultation {queue.current_elapsed_minutes} min so far,
-              about {queue.current_remaining_minutes} min left</>
-          )}
-          {' · '}refreshes every 3 seconds
+          Wait = time left in the current consultation + the typical time of each patient ahead,
+          shown as a range · refreshes every 3 seconds
         </div>
       </div>
     </div>
