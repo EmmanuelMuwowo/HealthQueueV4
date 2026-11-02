@@ -103,6 +103,8 @@ const day = (iso) =>
     day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Lusaka',
   });
 const shortRef = (ref) => ref.slice(0, 8).toUpperCase();
+const hasRange = (e) => e && e.ewt_low != null && e.ewt_high != null;
+const waitRange = (e) => (hasRange(e) ? `${e.ewt_low}–${e.ewt_high} min` : `${e.ewt_minutes} min`);
 
 export default function Reception() {
   const [servicePoints, setServicePoints] = useState([]);
@@ -425,15 +427,16 @@ export default function Reception() {
                   <div style={S.statLabel}>patients ahead</div>
                 </div>
                 <div style={S.stat}>
-                  <div style={S.statNum}>{result.ewt.ewt_minutes} min</div>
+                  <div style={S.statNum}>{waitRange(result.ewt)}</div>
                   <div style={S.statLabel}>estimated wait</div>
                 </div>
               </div>
               <div style={S.note}>
-                EWT = {result.ewt.patients_ahead} patients ahead × {result.ewt.avg_service_minutes} min
-                ({result.ewt.avg_source === 'default'
-                  ? 'default average: fewer than 3 consultations completed today'
-                  : `rolling average of ${result.ewt.sample_size} recent visits`})
+                {hasRange(result.ewt)
+                  ? `Estimate ${result.ewt.ewt_minutes} min, shown as a range (80% to 130%, rounded to 5 min). `
+                  : `Estimate ${result.ewt.ewt_minutes} min. `}
+                Based on the visit types of the {result.ewt.patients_ahead} patient
+                {result.ewt.patients_ahead === 1 ? '' : 's'} ahead and recent consultation times.
               </div>
             </>
           )}

@@ -1,7 +1,7 @@
 const pool = require('../db');
-const { getAverageServiceMinutes, estimateWait } = require('../services/queueService');
+const { estimateQueue } = require('../services/queueService');
 
-// GET /api/public/queue : no login, no patient names
+// GET /api/public/queue : no login, no patient names, no visit types
 const getPublicQueue = async (req, res) => {
   try {
     const sps = await pool.query(
@@ -11,7 +11,7 @@ const getPublicQueue = async (req, res) => {
     const servicePoints = [];
     for (const sp of sps.rows) {
       const tokens = await pool.query(
-        `SELECT token_number, priority, status, consultation_start
+        `SELECT id, token_number, priority, status
          FROM queue_tokens
          WHERE service_point_id = $1
            AND queue_date = CURRENT_DATE
@@ -23,9 +23,9 @@ const getPublicQueue = async (req, res) => {
         [sp.id]
       );
 
+      const { estimates } = await estimateQueue(pool, sp.id, null);
       const active = tokens.rows.filter((t) => t.status !== 'waiting');
-      const waitingRaw = tokens.rows.filter((t) => t.status === 'waiting');
-      const { avg } = await getAverageServiceMinutes(pool, sp.id);
+      const waiting = tokens.rows.filter((t) => t.status === 'waiting');
 
       servicePoints.push({
         id: sp.id,
@@ -34,16 +34,17 @@ const getPublicQueue = async (req, res) => {
         now_serving: active[0]
           ? { token_number: active[0].token_number, status: active[0].status }
           : null,
-        waiting_count: waitingRaw.length,
-        waiting: waitingRaw.slice(0, 8).map((t, i) => ({
-          token_number: t.token_number,
-          priority: t.priority,
-          ewt_minutes: Math.round(estimateWait({
-            ahead: active.length + i,
-            avg,
-            consultationStart: active.find((x) => x.status === 'in_consultation')?.consultation_start,
-          }).ewt),
-        })),
+        waiting_count: waiting.length,
+        waiting: waiting.slice(0, 8).map((t) => {
+          const e = estimates.get(t.id) || {};
+          return {
+            token_number: t.token_number,
+            priority: t.priority,
+            ewt_minutes: e.ewt_minutes ?? 0,
+            ewt_low: e.ewt_low ?? 0,
+            ewt_high: e.ewt_high ?? 5,
+          };
+        }),
       });
     }
 

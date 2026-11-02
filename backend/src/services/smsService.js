@@ -69,10 +69,21 @@ const sendSms = async (rawPhone, message) => {
   }
 };
 
+// Wait as a range, e.g. "15-30 min". Plain hyphen on purpose: an en dash is not in
+// the GSM-7 alphabet and would force the whole SMS into UCS-2 (70 chars per part).
+// Falls back to the single estimate if no range is available.
+const waitText = ({ ewt_minutes, ewt_low, ewt_high }) =>
+  ewt_low != null && ewt_high != null
+    ? `${ewt_low}-${ewt_high} min`
+    : `about ${ewt_minutes} min`;
+
 // Messages carry the token and wait time only. No patient name.
-const registrationMessage = ({ token_number, service_point, patients_ahead, ewt_minutes }) =>
+const registrationMessage = ({ token_number, service_point, patients_ahead, ...ewt }) =>
   `HealthQueue: Your token is ${token_number} (${service_point}). ` +
-  `${patients_ahead} ahead, about ${ewt_minutes} min wait. We will text you when it is your turn.`;
+  (patients_ahead === 0
+    ? 'You are next. '
+    : `${patients_ahead} ahead, wait ${waitText(ewt)}. `) +
+  'We will text you when it is your turn.';
 
 const calledMessage = ({ token_number, service_point }) =>
   `HealthQueue: ${token_number}, it is your turn. Please go to ${service_point} now.`;
@@ -123,4 +134,4 @@ const deliver = async ({ tokenId, kind, phone, message }) => {
   return { status, error, to, attempts };
 };
 
-module.exports = { sendSms, deliver, toE164, registrationMessage, calledMessage };
+module.exports = { sendSms, deliver, toE164, waitText, registrationMessage, calledMessage };

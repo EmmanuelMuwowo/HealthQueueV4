@@ -190,6 +190,12 @@ const createVisitAndToken = async (client, input, staffId) => {
 
   const ewt = await computeEWT(client, token);
 
+    // Keep the estimate given at registration, for the accuracy evaluation
+  await client.query(
+    'UPDATE queue_tokens SET ewt_at_registration = $2, ewt_low = $3, ewt_high = $4 WHERE id = $1',
+    [token.id, ewt.ewt_exact_minutes, ewt.ewt_low, ewt.ewt_high]
+  );
+
   return {
     patient,
     patient_history: {

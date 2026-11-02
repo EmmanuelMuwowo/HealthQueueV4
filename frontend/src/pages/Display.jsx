@@ -125,7 +125,11 @@ export default function Display() {
                     <span style={S.token}>{t.token_number}</span>
                     {t.priority === 'urgent' && <span style={S.urgent}>URGENT</span>}
                   </div>
-                  <div style={S.ewt}>≈ {t.ewt_minutes} min</div>
+                  <div style={S.ewt}>
+                    {t.ewt_low != null && t.ewt_high != null
+                      ? `${t.ewt_low}–${t.ewt_high} min`
+                      : `≈ ${t.ewt_minutes} min`}
+                  </div>
                 </div>
               ))
             )}

@@ -44,6 +44,8 @@ const registerVisit = async (req, res) => {
         service_point: result.service_point,
         patients_ahead: result.ewt.patients_ahead,
         ewt_minutes: result.ewt.ewt_minutes,
+        ewt_low: result.ewt.ewt_low,
+        ewt_high: result.ewt.ewt_high,
       }),
     }).catch(console.error);
   }

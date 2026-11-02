@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { getAverageServiceMinutes, estimateWait } = require('../services/queueService');
+const { estimateQueue } = require('../services/queueService');
 const { deliver, calledMessage } = require('../services/smsService');
 
 // Clinicians can only touch their own service point
@@ -45,11 +45,7 @@ const getQueue = async (req, res) => {
       [spId]
     );
 
-    const active = result.rows.filter((t) => t.status !== 'waiting');
-    const waitingRaw = result.rows.filter((t) => t.status === 'waiting');
-    const { avg, source } = await getAverageServiceMinutes(pool, spId);
-
-        const skippedRes = await pool.query(
+    const skippedRes = await pool.query(
       `SELECT qt.id, qt.token_number, p.full_name
        FROM queue_tokens qt
        JOIN visits v ON v.id = qt.visit_id
@@ -61,24 +57,35 @@ const getQueue = async (req, res) => {
       [spId]
     );
 
-    // EWT = patients ahead x average service duration
-    const inConsult = active.find((t) => t.status === 'in_consultation');
-    const waiting = waitingRaw.map((t, i) => {
-      const ahead = active.length + i;
-      const est = estimateWait({ ahead, avg, consultationStart: inConsult?.consultation_start });
-      return { ...t, patients_ahead: ahead, ewt_minutes: Math.round(est.ewt) };
-    });
-    const current = estimateWait({ ahead: 1, avg, consultationStart: inConsult?.consultation_start });
+    const { estimates, ahts, current } = await estimateQueue(pool, spId, null);
+    const r1 = (n) => Math.round(n * 10) / 10;
+
+    const active = result.rows.filter((t) => t.status !== 'waiting');
+    const waiting = result.rows
+      .filter((t) => t.status === 'waiting')
+      .map((t) => {
+        const e = estimates.get(t.id) || {};
+        return {
+          ...t,
+          patients_ahead: e.patients_ahead ?? 0,
+          ewt_minutes: e.ewt_minutes ?? 0,
+          ewt_low: e.ewt_low ?? 0,
+          ewt_high: e.ewt_high ?? 5,
+        };
+      });
 
     res.json({
       service_point: sp.rows[0],
       now_serving: active[0] || null,
-      waiting,
       skipped: skippedRes.rows,
-      avg_service_minutes: Math.round(avg * 10) / 10,
-      avg_source: source,
-      current_elapsed_minutes: current.elapsed === null ? null : Math.round(current.elapsed * 10) / 10,
-      current_remaining_minutes: current.remaining === null ? null : Math.round(current.remaining * 10) / 10,
+      waiting,
+      avg_service_minutes: r1(ahts.fallback.aht),
+      avg_source: ahts.fallback.source === 'ewma' ? 'rolling_average' : 'default',
+      category_aht: ahts.all.map((c) => ({
+        name: c.name, aht_minutes: r1(c.aht), source: c.source, sample_size: c.sample_size,
+      })),
+      current_elapsed_minutes: current ? r1(current.elapsed) : null,
+      current_remaining_minutes: current ? r1(current.remaining) : null,
     });
   } catch (err) {
     console.error(err.message);
