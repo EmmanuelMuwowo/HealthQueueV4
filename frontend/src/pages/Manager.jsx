@@ -110,6 +110,8 @@ export default function Manager() {
   const [servicePoints, setServicePoints] = useState([]);
   const [summary, setSummary] = useState(null);
   const [compare, setCompare] = useState([]);
+  const [byType, setByType] = useState([]);
+  const [accuracy, setAccuracy] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -126,6 +128,12 @@ export default function Manager() {
     api.get('/analytics/service-points', { params: { date } })
       .then((res) => setCompare(res.data))
       .catch(() => {});
+    api.get('/analytics/visit-types', { params })
+      .then((res) => setByType(res.data))
+      .catch(() => setByType([]));
+    api.get('/analytics/ewt-accuracy', { params })
+      .then((res) => setAccuracy(res.data))
+      .catch(() => setAccuracy(null));
   }, [date, spId]);
 
     useEffect(() => {
@@ -344,6 +352,110 @@ export default function Manager() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div style={S.card}>
+          <h2 style={S.h2}>By visit type</h2>
+          <p style={S.hint}>Selected date and service point. Default = the starting estimate used before 3 consultations are completed.</p>
+          {byType.length === 0 ? (
+            <div style={S.empty}>No visits for this selection.</div>
+          ) : (
+            <table style={S.table}>
+              <thead>
+                <tr>
+                  <th style={S.th}>Visit type</th>
+                  <th style={S.th}>Registered</th>
+                  <th style={S.th}>Served</th>
+                  <th style={S.th}>Avg wait</th>
+                  <th style={S.th}>Avg service</th>
+                  <th style={S.th}>Default</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byType.map((c) => (
+                  <tr key={`${c.service_point}-${c.visit_type}`}>
+                    <td style={S.td}>
+                      {c.visit_type}
+                      {!spId && <div style={{ fontSize: 12, color: '#8E8E93' }}>{c.service_point}</div>}
+                    </td>
+                    <td style={S.td}>{c.registered}</td>
+                    <td style={S.td}>{c.served}</td>
+                    <td style={S.td}>{fmt(c.avg_wait_minutes, ' min')}</td>
+                    <td style={S.td}>{fmt(c.avg_service_minutes, ' min')}</td>
+                    <td style={S.td}>{fmt(c.default_minutes, ' min')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div style={S.card}>
+          <h2 style={S.h2}>Waiting-time estimate accuracy</h2>
+          <p style={S.hint}>
+            Told = the range given at registration. Actual = consultation start − arrival time.
+            Patients who were re-queued after a no-show are left out.
+          </p>
+          {!accuracy || accuracy.evaluated === 0 ? (
+            <div style={S.empty}>No completed consultations with an estimate for this selection.</div>
+          ) : (
+            <>
+              <div style={S.grid}>
+                <div style={S.stat}>
+                  <div style={S.statNum}>{accuracy.evaluated}</div>
+                  <div style={S.statLabel}>Patients evaluated</div>
+                </div>
+                <div style={S.stat}>
+                  <div style={S.statNum}>{fmt(accuracy.mean_absolute_error_minutes, ' min')}</div>
+                  <div style={S.statLabel}>Average error</div>
+                </div>
+                <div style={S.stat}>
+                  <div style={S.statNum}>{fmt(accuracy.within_range_percent, '%')}</div>
+                  <div style={S.statLabel}>Actual wait inside range told</div>
+                </div>
+                <div style={S.stat}>
+                  <div style={S.statNum}>{fmt(accuracy.within_5_minutes_percent, '%')}</div>
+                  <div style={S.statLabel}>Within ±5 min of estimate</div>
+                </div>
+              </div>
+              <p style={S.hint}>
+                On average patients waited{' '}
+                {num(accuracy.mean_error_minutes) >= 0
+                  ? `${fmt(accuracy.mean_error_minutes, ' min')} longer`
+                  : `${fmt(Math.abs(num(accuracy.mean_error_minutes)), ' min')} less`}{' '}
+                than the estimate.
+              </p>
+              <table style={S.table}>
+                <thead>
+                  <tr>
+                    <th style={S.th}>Token</th>
+                    <th style={S.th}>Visit type</th>
+                    <th style={S.th}>Told</th>
+                    <th style={S.th}>Actual</th>
+                    <th style={S.th}>Difference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accuracy.rows.slice(0, 50).map((r) => (
+                    <tr key={r.id}>
+                      <td style={S.td}>
+                        {r.token_number}
+                        {r.priority === 'urgent' && <span style={{ color: '#CC0000', fontSize: 12 }}> · urgent</span>}
+                      </td>
+                      <td style={S.td}>{r.visit_type}</td>
+                      <td style={S.td}>{r.ewt_low}–{r.ewt_high} min</td>
+                      <td style={{ ...S.td, color: r.within_range ? '#1A7A5E' : '#CC0000', fontWeight: 600 }}>
+                        {fmt(r.actual_minutes, ' min')}
+                      </td>
+                      <td style={S.td}>
+                        {r.error_minutes > 0 ? '+' : ''}{fmt(r.error_minutes, ' min')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </div>
 
         <div style={S.provenance}>

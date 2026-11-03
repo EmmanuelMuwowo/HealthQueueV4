@@ -273,6 +273,123 @@ const exportCsv = async (req, res) => {
   }
 };
 
+// Date scope shared by the two reports below:
+// ?days=N  -> the last N days (for the evaluation in the report)
+// ?date=YYYY-MM-DD -> one day (default today)
+const dateScope = (req) => {
+  const days = req.query.days ? Math.min(Math.max(parseInt(req.query.days) || 1, 1), 90) : null;
+  const date = req.query.date || null;
+  return { days, date };
+};
+const DATE_SQL = `qt.queue_date >= CASE WHEN $1::int IS NOT NULL
+                    THEN CURRENT_DATE - ($1::int - 1) ELSE COALESCE($2::date, CURRENT_DATE) END
+                  AND qt.queue_date <= CASE WHEN $1::int IS NOT NULL
+                    THEN CURRENT_DATE ELSE COALESCE($2::date, CURRENT_DATE) END`;
+
+// GET /api/analytics/visit-types?date=YYYY-MM-DD&service_point_id=1  (or ?days=N)
+// Volume, wait and service time per visit type.
+const getByCategory = async (req, res) => {
+  try {
+    const { days, date } = dateScope(req);
+    const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
+    const result = await pool.query(
+      `SELECT sp.name AS service_point,
+         COALESCE(vc.name, 'Not set') AS visit_type,
+         vc.default_minutes::float AS default_minutes,
+         COUNT(qt.id)::int AS registered,
+         COUNT(qt.id) FILTER (WHERE qt.status = 'completed')::int AS served,
+         ROUND((AVG(EXTRACT(EPOCH FROM (qt.consultation_start - qt.arrival_time)) / 60)
+           FILTER (WHERE qt.consultation_start IS NOT NULL))::numeric, 1) AS avg_wait_minutes,
+         ROUND((AVG(EXTRACT(EPOCH FROM (qt.consultation_end - qt.consultation_start)) / 60)
+           FILTER (WHERE qt.consultation_end IS NOT NULL))::numeric, 1) AS avg_service_minutes
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       JOIN service_points sp ON sp.id = qt.service_point_id
+       LEFT JOIN visit_categories vc ON vc.id = v.category_id
+       WHERE ${DATE_SQL}
+         AND ($3::int IS NULL OR qt.service_point_id = $3)
+       GROUP BY sp.id, sp.name, vc.id, vc.name, vc.default_minutes, vc.sort_order
+       ORDER BY sp.id, vc.sort_order NULLS LAST`,
+      [days, date, sp]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+const round1 = (n) => Math.round(n * 10) / 10;
+const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : null);
+
+// GET /api/analytics/ewt-accuracy?date=YYYY-MM-DD&service_point_id=1  (or ?days=N)
+// Compares the wait each patient was told at registration with the wait they actually had.
+// Actual wait = consultation start - arrival time (the same definition as the dashboard).
+// Re-queued tokens are left out: their wait includes time after a no-show, which no estimate covers.
+const getEwtAccuracy = async (req, res) => {
+  try {
+    const { days, date } = dateScope(req);
+    const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
+    const result = await pool.query(
+      `SELECT qt.id, qt.token_number, qt.priority, qt.queue_date::text AS date,
+         sp.name AS service_point,
+         COALESCE(vc.name, 'Not set') AS visit_type,
+         qt.ewt_at_registration::float AS predicted,
+         qt.ewt_low::float AS ewt_low, qt.ewt_high::float AS ewt_high,
+         EXTRACT(EPOCH FROM (qt.consultation_start - qt.arrival_time))::float / 60 AS actual
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       JOIN service_points sp ON sp.id = qt.service_point_id
+       LEFT JOIN visit_categories vc ON vc.id = v.category_id
+       WHERE ${DATE_SQL}
+         AND ($3::int IS NULL OR qt.service_point_id = $3)
+         AND qt.consultation_start IS NOT NULL
+         AND qt.ewt_at_registration IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM event_log e WHERE e.token_id = qt.id AND e.event_type = 'recalled'
+         )
+       ORDER BY qt.queue_date, qt.arrival_time`,
+      [days, date, sp]
+    );
+
+    const rows = result.rows.map((r) => {
+      const error = r.actual - r.predicted; // positive = waited longer than told
+      return {
+        id: r.id,
+        date: r.date,
+        token_number: r.token_number,
+        service_point: r.service_point,
+        visit_type: r.visit_type,
+        priority: r.priority,
+        predicted_minutes: round1(r.predicted),
+        ewt_low: r.ewt_low,
+        ewt_high: r.ewt_high,
+        actual_minutes: round1(r.actual),
+        error_minutes: round1(error),
+        within_range: r.ewt_low !== null && r.ewt_high !== null
+          && r.actual >= r.ewt_low && r.actual <= r.ewt_high,
+        within_5_minutes: Math.abs(error) <= 5,
+      };
+    });
+
+    const n = rows.length;
+    const sum = (f) => rows.reduce((a, r) => a + f(r), 0);
+    res.json({
+      scope: { days, date: days ? null : (date || 'today'), service_point_id: sp },
+      evaluated: n,
+      mean_absolute_error_minutes: n ? round1(sum((r) => Math.abs(r.error_minutes)) / n) : null,
+      mean_error_minutes: n ? round1(sum((r) => r.error_minutes) / n) : null,
+      within_range_percent: pct(rows.filter((r) => r.within_range).length, n),
+      within_5_minutes_percent: pct(rows.filter((r) => r.within_5_minutes).length, n),
+      rows,
+    });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 module.exports = {
   getSummary, getByServicePoint, getTrend, listTokens, getTokenTimeline, exportCsv,
+  getByCategory, getEwtAccuracy,
 };
