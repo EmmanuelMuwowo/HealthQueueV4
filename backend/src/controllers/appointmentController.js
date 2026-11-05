@@ -168,6 +168,8 @@ const checkIn = async (req, res) => {
           service_point: result.service_point,
           patients_ahead: result.ewt.patients_ahead,
           ewt_minutes: result.ewt.ewt_minutes,
+          ewt_low: result.ewt.ewt_low,
+          ewt_high: result.ewt.ewt_high,
         }),
       }).catch(console.error);
     }
@@ -183,4 +185,78 @@ const checkIn = async (req, res) => {
   }
 };
 
-module.exports = { bookAppointment, listAppointments, cancelAppointment, checkIn };
+// POST /api/follow-ups  (clinician or admin)
+// Body: { token_id, date: 'YYYY-MM-DD', time: 'HH:MM', category_id? }
+// Books a return visit for the patient behind a token, at the same service point.
+// Reminder SMS are then sent automatically by the reminder job.
+const bookFollowUp = async (req, res) => {
+  const { token_id, date, time, category_id } = req.body;
+  if (!token_id || !/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !/^\d{2}:\d{2}$/.test(time || '')) {
+    return res.status(400).json({ error: 'Date and time are required' });
+  }
+  // Lusaka is UTC+02:00 all year
+  const when = new Date(`${date}T${time}:00+02:00`);
+  if (Number.isNaN(when.getTime())) return res.status(400).json({ error: 'Invalid date/time' });
+  if (when <= new Date()) return res.status(400).json({ error: 'The follow-up must be in the future' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const found = await client.query(
+      `SELECT qt.id, qt.status, qt.service_point_id, qt.token_number,
+              v.id AS visit_id, v.patient_id, v.category_id, p.phone_number
+       FROM queue_tokens qt
+       JOIN visits v ON v.id = qt.visit_id
+       JOIN patients p ON p.id = v.patient_id
+       WHERE qt.id = $1`,
+      [parseInt(token_id)]
+    );
+    if (found.rows.length === 0) throw httpError(404, 'Token not found');
+    const tok = found.rows[0];
+
+    if (req.staff.role === 'clinician' && req.staff.service_point_id !== tok.service_point_id) {
+      throw httpError(403, 'Not your service point');
+    }
+    if (!['in_consultation', 'completed'].includes(tok.status)) {
+      throw httpError(409, 'A follow-up can only be booked during or after the consultation.');
+    }
+
+    const category = await resolveCategory(client, tok.service_point_id, category_id || tok.category_id);
+
+    const dup = await client.query(
+      `SELECT id FROM appointments
+       WHERE patient_id = $1 AND service_point_id = $2 AND status = 'booked'
+         AND (scheduled_at AT TIME ZONE '${TZ}')::date
+           = ($3::timestamptz AT TIME ZONE '${TZ}')::date`,
+      [tok.patient_id, tok.service_point_id, when.toISOString()]
+    );
+    if (dup.rows.length > 0) {
+      throw httpError(409, 'This patient already has a booked appointment on that day.');
+    }
+
+    const created = await client.query(
+      `INSERT INTO appointments
+         (patient_id, service_point_id, scheduled_at, reason, created_by, category_id, follow_up_of_visit)
+       VALUES ($1, $2, $3, 'Follow-up', $4, $5, $6) RETURNING *`,
+      [tok.patient_id, tok.service_point_id, when.toISOString(), req.staff.id,
+       category ? category.id : null, tok.visit_id]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      appointment: created.rows[0],
+      token_number: tok.token_number,
+      reminders: tok.phone_number ? 'scheduled' : 'no phone number',
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { bookAppointment, listAppointments, cancelAppointment, checkIn, bookFollowUp };

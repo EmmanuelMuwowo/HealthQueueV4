@@ -1,4 +1,4 @@
-HealthQueue test report, 03/11/2026, 15:31:27 (Lusaka time)
+HealthQueue test report, 05/11/2026, 15:31:23 (Lusaka time)
 
 EWT unit tests       14 passed, 0 failed   OK
 Skip and re-queue    11 passed, 0 failed   OK
@@ -15,85 +15,85 @@ TAP version 13
 # Subtest: EWMA weights the newest consultation by 0.3
 ok 1 - EWMA weights the newest consultation by 0.3
   ---
-  duration_ms: 0.7167
+  duration_ms: 0.7185
   type: 'test'
   ...
 # Subtest: EWMA of identical durations is that duration
 ok 2 - EWMA of identical durations is that duration
   ---
-  duration_ms: 0.1055
+  duration_ms: 0.0913
   type: 'test'
   ...
 # Subtest: Fewer than 3 completed: the category default is used
 ok 3 - Fewer than 3 completed: the category default is used
   ---
-  duration_ms: 0.1147
+  duration_ms: 0.111
   type: 'test'
   ...
 # Subtest: 3 or more completed: the EWMA is used
 ok 4 - 3 or more completed: the EWMA is used
   ---
-  duration_ms: 0.6364
+  duration_ms: 0.7043
   type: 'test'
   ...
 # Subtest: The window size is 10
 ok 5 - The window size is 10
   ---
-  duration_ms: 0.1265
+  duration_ms: 0.1031
   type: 'test'
   ...
 # Subtest: Proposal example: 3 patients ahead x 8 minutes = 24
 ok 6 - Proposal example: 3 patients ahead x 8 minutes = 24
   ---
-  duration_ms: 0.2398
+  duration_ms: 0.2497
   type: 'test'
   ...
 # Subtest: Each patient ahead counts their own visit type (5 + 12 + 25 = 42)
 ok 7 - Each patient ahead counts their own visit type (5 + 12 + 25 = 42)
   ---
-  duration_ms: 0.1219
+  duration_ms: 0.1077
   type: 'test'
   ...
 # Subtest: Two clinicians and a 10% buffer: 42 / 2 x 1.1 = 23.1
 ok 8 - Two clinicians and a 10% buffer: 42 / 2 x 1.1 = 23.1
   ---
-  duration_ms: 0.1647
+  duration_ms: 0.1592
   type: 'test'
   ...
 # Subtest: Current consultation counts only its remaining time (6 of 8 used: 2 + 2 x 8 = 18)
 ok 9 - Current consultation counts only its remaining time (6 of 8 used: 2 + 2 x 8 = 18)
   ---
-  duration_ms: 0.7706
+  duration_ms: 0.7367
   type: 'test'
   ...
 # Subtest: An overrunning consultation still counts 20% of its AHT
 ok 10 - An overrunning consultation still counts 20% of its AHT
   ---
-  duration_ms: 0.1456
+  duration_ms: 0.1589
   type: 'test'
   ...
 # Subtest: A called patient (not started) counts a full AHT
 ok 11 - A called patient (not started) counts a full AHT
   ---
-  duration_ms: 0.1227
+  duration_ms: 0.1164
   type: 'test'
   ...
 # Subtest: Nobody ahead: estimate 0, band 0 to 5
 ok 12 - Nobody ahead: estimate 0, band 0 to 5
   ---
-  duration_ms: 0.0786
+  duration_ms: 0.0931
   type: 'test'
   ...
 # Subtest: Band: 80% to 130%, rounded outwards to 5 minutes (22 -> 15 to 30)
 ok 13 - Band: 80% to 130%, rounded outwards to 5 minutes (22 -> 15 to 30)
   ---
-  duration_ms: 0.5713
+  duration_ms: 0.597
   type: 'test'
   ...
 # Subtest: Band always contains the estimate
 ok 14 - Band always contains the estimate
   ---
-  duration_ms: 0.097
+  duration_ms: 0.0822
   type: 'test'
   ...
 1..14
@@ -104,7 +104,7 @@ ok 14 - Band always contains the estimate
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 81.9861
+# duration_ms 70.4253
 
 ===== testSkip.js =====
 PASS  Register Skip Test A
@@ -126,10 +126,10 @@ PASS  Token list loads
 PASS  Timeline loads
 
 Timeline for GOP-002 (General Outpatient)
-  15:31:28  arrived  (Grace Mulenga)
-  15:31:28  called  (Dr. Banda)
-  15:31:28  consultation_started  (Dr. Banda)
-  15:31:28  completed  (Dr. Banda)
+  15:31:23  arrived  (Grace Mulenga)
+  15:31:24  called  (Dr. Banda)
+  15:31:24  consultation_started  (Dr. Banda)
+  15:31:24  completed  (Dr. Banda)
 Intervals: {
   wait_until_called_minutes: 0,
   call_to_start_minutes: 0,
@@ -155,7 +155,7 @@ PASS  CSV row count equals tokens in the trend chart
 PASS  Clinician is refused (403)
 PASS  Bad date is refused (400)
 
-Day 2026-11-03: CSV average wait 0.00 min, dashboard 0.0 min
+Day 2026-11-05: CSV average wait 0.00 min, dashboard 0.0 min
 PASS  CSV average wait matches the dashboard (within 0.15 min)
 
 7 passed, 0 failed

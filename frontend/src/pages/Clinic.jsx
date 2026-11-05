@@ -82,7 +82,33 @@ const S = {
     fontSize: 13, color: '#3C3C43', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
   },
   ahtRow: { display: 'flex', justifyContent: 'space-between', padding: '4px 0' },
+  followCard: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 24,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '2px solid #34C759',
+  },
+  followRow: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 },
+  followField: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#3C3C43' },
+  followInput: {
+    padding: '9px 10px', borderRadius: 8, border: '1px solid #E5E5EA', fontSize: 14,
+    backgroundColor: '#FAFAFA',
+  },
+  followBtn: {
+    padding: '10px 18px', backgroundColor: '#34C759', color: '#fff', border: 'none',
+    borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+  },
+  skipBtn: {
+    padding: '10px 14px', backgroundColor: '#F2F2F7', color: '#3C3C43', border: 'none',
+    borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+  },
+  done: {
+    color: '#1A7A5E', fontSize: 14, backgroundColor: '#E8F8F2',
+    padding: '10px 14px', borderRadius: 8, marginBottom: 16,
+  },
 };
+
+// YYYY-MM-DD in Lusaka time, `days` from today
+const lusakaDate = (days = 0) =>
+  new Date(Date.now() + days * 86400000).toLocaleDateString('en-CA', { timeZone: 'Africa/Lusaka' });
 
 const wait = (t) =>
   t.ewt_low != null && t.ewt_high != null ? `${t.ewt_low}–${t.ewt_high} min` : `${t.ewt_minutes} min`;
@@ -93,6 +119,63 @@ export default function Clinic() {
   const [queue, setQueue] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [followFor, setFollowFor] = useState(null); // the patient just completed
+  const [follow, setFollow] = useState({ date: '', time: '09:00', category_id: '' });
+  const [followDone, setFollowDone] = useState('');
+
+  useEffect(() => {
+    api.get('/visits/categories')
+      .then((res) => setCategories(res.data.filter((c) => String(c.service_point_id) === String(spId))))
+      .catch(() => {});
+  }, [spId]);
+
+  // Offer the visit type that looks like a follow-up, otherwise the usual one
+  const followCategory = () => {
+    const f = categories.find((c) => /follow|refill|review/i.test(c.name));
+    const def = categories.find((c) => c.is_default);
+    return String((f || def || categories[0] || {}).id || '');
+  };
+
+  const complete = async (token) => {
+    setBusy(true);
+    setError('');
+    try {
+      await api.put(`/queue/tokens/${token.id}/complete`);
+      setFollowDone('');
+      setFollowFor({ id: token.id, token_number: token.token_number, full_name: token.full_name });
+      setFollow({ date: lusakaDate(7), time: '09:00', category_id: followCategory() });
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'That action failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const bookFollowUp = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.post('/follow-ups', {
+        token_id: followFor.id,
+        date: follow.date,
+        time: follow.time,
+        category_id: follow.category_id ? parseInt(follow.category_id) : undefined,
+      });
+      setFollowDone(
+        `Follow-up booked for ${followFor.token_number} on ${follow.date} at ${follow.time}. ` +
+        (res.data.reminders === 'scheduled'
+          ? 'Reminder SMS will be sent the day before and 2 hours before.'
+          : 'No phone number, so no reminder SMS.')
+      );
+      setFollowFor(null);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not book the follow-up.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -177,7 +260,7 @@ export default function Clinic() {
                 </button>
               ) : (
                 <button style={S.heroBtn} disabled={busy}
-                  onClick={() => act(() => api.put(`/queue/tokens/${current.id}/complete`))}>
+                  onClick={() => complete(current)}>
                   Complete
                 </button>
               )}
@@ -207,6 +290,42 @@ export default function Clinic() {
           </div>
         ) : (
           <div style={S.heroEmpty}>No patient called. Press "Call next" to begin.</div>
+        )}
+
+        {followDone && <div style={S.done}>{followDone}</div>}
+
+        {followFor && (
+          <div style={S.followCard}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1C1E' }}>
+              {followFor.token_number} completed. Book a follow-up visit?
+            </div>
+            <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 4 }}>
+              {followFor.full_name} · reminders go by SMS the day before and 2 hours before
+            </div>
+            <div style={S.followRow}>
+              <label style={S.followField}>Date
+                <input type="date" style={S.followInput} value={follow.date} min={lusakaDate(1)}
+                  onChange={(e) => setFollow({ ...follow, date: e.target.value })} />
+              </label>
+              <label style={S.followField}>Time
+                <input type="time" style={S.followInput} value={follow.time}
+                  onChange={(e) => setFollow({ ...follow, time: e.target.value })} />
+              </label>
+              <label style={S.followField}>Visit type
+                <select style={S.followInput} value={follow.category_id}
+                  onChange={(e) => setFollow({ ...follow, category_id: e.target.value })}>
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <button style={S.followBtn} disabled={busy || !follow.date || !follow.time}
+                onClick={bookFollowUp}>
+                Book follow-up
+              </button>
+              <button style={S.skipBtn} disabled={busy} onClick={() => setFollowFor(null)}>
+                No follow-up
+              </button>
+            </div>
+          </div>
         )}
 
         <div style={S.sectionLabel}>Waiting ({queue.waiting.length})</div>

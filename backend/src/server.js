@@ -22,6 +22,12 @@ app.use('/api/appointments', appointmentRoutes);
 const patientRoutes = require('./routes/patients');
 app.use('/api/patients', patientRoutes);
 
+// Follow-up booking from the clinician screen (reminders are sent by the reminder job)
+const { authenticate, authorize } = require('./middleware/auth');
+const { bookFollowUp } = require('./controllers/appointmentController');
+app.post('/api/follow-ups', authenticate, authorize('clinician', 'admin'), bookFollowUp);
+const { startReminderScheduler } = require('./services/reminderService');
+
 app.get('/api/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT COUNT(*) FROM service_points');
@@ -39,4 +45,5 @@ app.get('/api/health', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`HealthQueue v4 server running on port ${PORT}`);
+  startReminderScheduler();
 });

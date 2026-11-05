@@ -59,6 +59,10 @@ const S = {
     borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
   },
   empty: { color: '#8E8E93', fontSize: 15, textAlign: 'center', padding: '40px 0' },
+  followTag: {
+    padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+    backgroundColor: '#FFF3CD', color: '#856404',
+  },
   tokenBox: {
     background: 'linear-gradient(135deg, #34C759 0%, #248A3D 100%)', borderRadius: 14,
     padding: 18, color: '#fff', marginTop: 16,
@@ -71,6 +75,10 @@ const timeLabel = (iso) =>
   });
 
 const statusLabel = (s) => s.replace('_', ' ');
+const shortWhen = (iso) =>
+  new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Lusaka',
+  });
 
 export default function Appointments() {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
@@ -148,6 +156,7 @@ export default function Appointments() {
         service_point_id: parseInt(form.service_point_id),
         scheduled_at: `${form.date}T${form.time}:00+02:00`,
         reason: form.reason,
+        category_id: form.category_id ? parseInt(form.category_id) : undefined,
       });
       setNotice(`Booked ${form.full_name} for ${form.date} at ${form.time}.`);
       setForm({ ...form, full_name: '', phone_number: '', gender: '', reason: '' });
@@ -263,6 +272,7 @@ export default function Appointments() {
                 <div style={S.rowTop}>
                   <div style={S.time}>{timeLabel(a.scheduled_at)}</div>
                   <div style={S.name}>{a.full_name}</div>
+                  {a.follow_up_of_visit && <span style={S.followTag}>follow-up</span>}
                   <span style={S.pill(a.status)}>{statusLabel(a.status)}</span>
                 </div>
                 <div style={S.sub}>
@@ -270,6 +280,14 @@ export default function Appointments() {
                   {a.phone_number ? ` · ${a.phone_number}` : ''}
                   {a.reason ? ` · ${a.reason}` : ''}
                 </div>
+                {(a.reminder_1d_at || a.reminder_2h_at) && (
+                  <div style={S.sub}>
+                    Reminder SMS:
+                    {a.reminder_1d_at ? ` day before (${shortWhen(a.reminder_1d_at)})` : ''}
+                    {a.reminder_1d_at && a.reminder_2h_at ? ',' : ''}
+                    {a.reminder_2h_at ? ` 2 hours before (${shortWhen(a.reminder_2h_at)})` : ''}
+                  </div>
+                )}
                 {a.status === 'booked' && (
                   <div style={S.actions}>
                     {listDate === today && (
@@ -294,7 +312,10 @@ export default function Appointments() {
               <div style={{ fontSize: 40, fontWeight: 700 }}>{checkedIn.token.token_number}</div>
               <div style={{ fontSize: 15 }}>{checkedIn.patient.full_name}</div>
               <div style={{ fontSize: 13, opacity: 0.9, marginTop: 6 }}>
-                {checkedIn.ewt.patients_ahead} ahead · about {checkedIn.ewt.ewt_minutes} min
+                {checkedIn.ewt.patients_ahead} ahead ·{' '}
+                {checkedIn.ewt.ewt_low != null && checkedIn.ewt.ewt_high != null
+                  ? `wait ${checkedIn.ewt.ewt_low}–${checkedIn.ewt.ewt_high} min`
+                  : `about ${checkedIn.ewt.ewt_minutes} min`}
               </div>
             </div>
           )}

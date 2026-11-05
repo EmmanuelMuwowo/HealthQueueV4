@@ -1,10 +1,10 @@
 const pool = require('../db');
-
+ 
 const apiUrl = () =>
   process.env.AT_USERNAME === 'sandbox'
     ? 'https://api.sandbox.africastalking.com/version1/messaging'
     : 'https://api.africastalking.com/version1/messaging';
-
+ 
 // 0977123456 / 260977123456 / +260977123456  ->  +260977123456
 const toE164 = (raw) => {
   if (!raw) return null;
@@ -14,9 +14,9 @@ const toE164 = (raw) => {
   if (/^0\d{9}$/.test(digits)) return `+260${digits.slice(1)}`;
   return null;
 };
-
+ 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
+ 
 // Retry waits in ms. The proposal specifies 30 s then 120 s.
 // For rehearsals you can set SMS_RETRY_DELAYS_MS=2000,4000 in .env
 const retryDelays = () =>
@@ -24,7 +24,7 @@ const retryDelays = () =>
     .split(',')
     .map((n) => parseInt(n.trim()))
     .filter((n) => n > 0);
-
+ 
 // retryable = true only for problems that may fix themselves
 const sendSms = async (rawPhone, message) => {
   const to = toE164(rawPhone);
@@ -68,7 +68,7 @@ const sendSms = async (rawPhone, message) => {
     return { ok: false, to, retryable: true, error: err.message };
   }
 };
-
+ 
 // Wait as a range, e.g. "15-30 min". Plain hyphen on purpose: an en dash is not in
 // the GSM-7 alphabet and would force the whole SMS into UCS-2 (70 chars per part).
 // Falls back to the single estimate if no range is available.
@@ -76,7 +76,7 @@ const waitText = ({ ewt_minutes, ewt_low, ewt_high }) =>
   ewt_low != null && ewt_high != null
     ? `${ewt_low}-${ewt_high} min`
     : `about ${ewt_minutes} min`;
-
+ 
 // Messages carry the token and wait time only. No patient name.
 const registrationMessage = ({ token_number, service_point, patients_ahead, ...ewt }) =>
   `HealthQueue: Your token is ${token_number} (${service_point}). ` +
@@ -84,19 +84,19 @@ const registrationMessage = ({ token_number, service_point, patients_ahead, ...e
     ? 'You are next. '
     : `${patients_ahead} ahead, wait ${waitText(ewt)}. `) +
   'We will text you when it is your turn.';
-
+ 
 const calledMessage = ({ token_number, service_point }) =>
   `HealthQueue: ${token_number}, it is your turn. Please go to ${service_point} now.`;
-
+ 
 // Sends (or logs) a message and records the outcome in sms_log.
 // Never throws, so an SMS problem can never stop a patient from getting a token.
-const deliver = async ({ tokenId, kind, phone, message }) => {
+const deliver = async ({ tokenId, appointmentId, kind, phone, message }) => {
   const mode = process.env.SMS_MODE === 'log' ? 'log' : 'api';
   const to = toE164(phone);
   let status;
   let error = null;
   let attempts = 1;
-
+ 
   try {
     if (!to) {
       status = 'failed';
@@ -121,17 +121,17 @@ const deliver = async ({ tokenId, kind, phone, message }) => {
     status = 'failed';
     error = err.message;
   }
-
+ 
   try {
     await pool.query(
-      `INSERT INTO sms_log (token_id, kind, to_number, message, mode, status, error, attempts)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [tokenId || null, kind, to, message, mode, status, error, attempts]
+      `INSERT INTO sms_log (token_id, appointment_id, kind, to_number, message, mode, status, error, attempts)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [tokenId || null, appointmentId || null, kind, to, message, mode, status, error, attempts]
     );
   } catch (err) {
     console.error('sms_log insert failed:', err.message);
   }
   return { status, error, to, attempts };
 };
-
+ 
 module.exports = { sendSms, deliver, toE164, waitText, registrationMessage, calledMessage };
