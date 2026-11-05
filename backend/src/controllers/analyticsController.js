@@ -1,7 +1,7 @@
 const pool = require('../db');
-
+ 
 const TZ = 'Africa/Lusaka';
-
+ 
 // GET /api/analytics/summary?service_point_id=1&date=2026-10-06
 // Both params are optional: no service point = whole clinic, no date = today.
 const getSummary = async (req, res) => {
@@ -11,7 +11,7 @@ const getSummary = async (req, res) => {
     const params = [sp, date];
     const scope = `queue_date = COALESCE($2::date, CURRENT_DATE)
                    AND ($1::int IS NULL OR service_point_id = $1)`;
-
+ 
     // Wait = arrival to consultation start. Service = consultation start to end.
     const summary = await pool.query(
       `SELECT
@@ -33,7 +33,7 @@ const getSummary = async (req, res) => {
        WHERE ${scope}`,
       params
     );
-
+ 
     const arrivals = await pool.query(
       `SELECT EXTRACT(HOUR FROM arrival_time AT TIME ZONE '${TZ}')::int AS hour,
               COUNT(*)::int AS arrivals,
@@ -44,7 +44,7 @@ const getSummary = async (req, res) => {
        GROUP BY hour ORDER BY hour`,
       params
     );
-
+ 
     const throughput = await pool.query(
       `SELECT EXTRACT(HOUR FROM consultation_end AT TIME ZONE '${TZ}')::int AS hour,
               COUNT(*)::int AS served
@@ -53,11 +53,11 @@ const getSummary = async (req, res) => {
        GROUP BY hour ORDER BY hour`,
       params
     );
-
+ 
     const peak = arrivals.rows.reduce(
       (best, r) => (!best || r.arrivals > best.arrivals ? r : best), null
     );
-
+ 
     res.json({
       scope: { service_point_id: sp, date: date || 'today' },
       ...summary.rows[0],
@@ -70,7 +70,7 @@ const getSummary = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 // GET /api/analytics/service-points : comparison across all service points
 const getByServicePoint = async (req, res) => {
   try {
@@ -99,14 +99,14 @@ const getByServicePoint = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 // GET /api/analytics/trend?days=14&service_point_id=1
 // One row per day that had visits: registered, served, average wait and service time.
 const getTrend = async (req, res) => {
   try {
     const days = Math.min(Math.max(parseInt(req.query.days) || 14, 1), 90);
     const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
-
+ 
     const result = await pool.query(
       `SELECT queue_date::text AS date,
          COUNT(*)::int AS registered,
@@ -128,10 +128,10 @@ const getTrend = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 const minutesBetween = (a, b) =>
   a && b ? Math.round(((new Date(b) - new Date(a)) / 60000) * 10) / 10 : null;
-
+ 
 // GET /api/analytics/tokens?date=YYYY-MM-DD&service_point_id=1  (defaults to today)
 const listTokens = async (req, res) => {
   try {
@@ -153,7 +153,7 @@ const listTokens = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 // GET /api/analytics/tokens/:id/timeline : every recorded event for one token.
 // No patient name: analytics works on tokens, not on people.
 const getTokenTimeline = async (req, res) => {
@@ -161,14 +161,20 @@ const getTokenTimeline = async (req, res) => {
     const id = parseInt(req.params.id);
     const tok = await pool.query(
       `SELECT qt.id, qt.token_number, qt.priority, qt.status,
-              qt.queue_date::text AS date, sp.name AS service_point
+              qt.queue_date::text AS date, sp.name AS service_point,
+              v.visit_type, rt.token_number AS referred_from,
+              (SELECT string_agg(nt.token_number, ', ')
+                 FROM visits nv JOIN queue_tokens nt ON nt.visit_id = nv.id
+                WHERE nv.referred_from_token = qt.id) AS referred_to
        FROM queue_tokens qt
        JOIN service_points sp ON sp.id = qt.service_point_id
+       JOIN visits v ON v.id = qt.visit_id
+       LEFT JOIN queue_tokens rt ON rt.id = v.referred_from_token
        WHERE qt.id = $1`,
       [id]
     );
     if (tok.rows.length === 0) return res.status(404).json({ error: 'Token not found' });
-
+ 
     const ev = await pool.query(
       `SELECT e.event_type, e.event_time, s.full_name AS actor
        FROM event_log e
@@ -179,7 +185,7 @@ const getTokenTimeline = async (req, res) => {
     );
     const events = ev.rows;
     const reversed = [...events].reverse();
-
+ 
     const arrived = events.find((e) => e.event_type === 'arrived')?.event_time;
     const started = reversed.find((e) => e.event_type === 'consultation_started')?.event_time;
     const completed = reversed.find((e) => e.event_type === 'completed')?.event_time;
@@ -187,7 +193,7 @@ const getTokenTimeline = async (req, res) => {
     const called = started
       ? reversed.find((e) => e.event_type === 'called' && new Date(e.event_time) <= new Date(started))?.event_time
       : reversed.find((e) => e.event_type === 'called')?.event_time;
-
+ 
     res.json({
       token: tok.rows[0],
       events,
@@ -203,19 +209,19 @@ const getTokenTimeline = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 const csvCell = (v) => {
   if (v === null || v === undefined) return '';
   const s = String(v);
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
-
+ 
 const EXPORT_COLUMNS = [
   'date', 'token', 'service_point', 'visit_type', 'priority', 'status',
   'arrived', 'called', 'consultation_start', 'consultation_end',
   'wait_minutes', 'service_minutes',
 ];
-
+ 
 // GET /api/analytics/export?from=YYYY-MM-DD&to=YYYY-MM-DD&days=14&service_point_id=1
 // One row per token. No patient names or phone numbers, and times are Lusaka local time.
 // wait_minutes = arrival to consultation start, the same definition as the dashboard.
@@ -231,7 +237,7 @@ const exportCsv = async (req, res) => {
       ? Math.min(Math.max(parseInt(req.query.days) || 1, 1), 90)
       : null;
     const sp = req.query.service_point_id ? parseInt(req.query.service_point_id) : null;
-
+ 
     const result = await pool.query(
       `SELECT qt.queue_date::text AS date,
          qt.token_number AS token,
@@ -258,10 +264,10 @@ const exportCsv = async (req, res) => {
        ORDER BY qt.queue_date, qt.arrival_time`,
       [from, to, days, sp]
     );
-
+ 
     const lines = result.rows.map((r) => EXPORT_COLUMNS.map((c) => csvCell(r[c])).join(','));
     const csv = [EXPORT_COLUMNS.join(','), ...lines].join('\r\n') + '\r\n';
-
+ 
     const label = (days ? `last_${days}_days` : `${from || 'today'}${to && to !== from ? `_to_${to}` : ''}`)
       .replace(/[^0-9A-Za-z_-]/g, '');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -272,7 +278,7 @@ const exportCsv = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 // Date scope shared by the two reports below:
 // ?days=N  -> the last N days (for the evaluation in the report)
 // ?date=YYYY-MM-DD -> one day (default today)
@@ -285,7 +291,7 @@ const DATE_SQL = `qt.queue_date >= CASE WHEN $1::int IS NOT NULL
                     THEN CURRENT_DATE - ($1::int - 1) ELSE COALESCE($2::date, CURRENT_DATE) END
                   AND qt.queue_date <= CASE WHEN $1::int IS NOT NULL
                     THEN CURRENT_DATE ELSE COALESCE($2::date, CURRENT_DATE) END`;
-
+ 
 // GET /api/analytics/visit-types?date=YYYY-MM-DD&service_point_id=1  (or ?days=N)
 // Volume, wait and service time per visit type.
 const getByCategory = async (req, res) => {
@@ -318,10 +324,10 @@ const getByCategory = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 const round1 = (n) => Math.round(n * 10) / 10;
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 1000) / 10 : null);
-
+ 
 // GET /api/analytics/ewt-accuracy?date=YYYY-MM-DD&service_point_id=1  (or ?days=N)
 // Compares the wait each patient was told at registration with the wait they actually had.
 // Actual wait = consultation start - arrival time (the same definition as the dashboard).
@@ -351,7 +357,7 @@ const getEwtAccuracy = async (req, res) => {
        ORDER BY qt.queue_date, qt.arrival_time`,
       [days, date, sp]
     );
-
+ 
     const rows = result.rows.map((r) => {
       const error = r.actual - r.predicted; // positive = waited longer than told
       return {
@@ -371,7 +377,7 @@ const getEwtAccuracy = async (req, res) => {
         within_5_minutes: Math.abs(error) <= 5,
       };
     });
-
+ 
     const n = rows.length;
     const sum = (f) => rows.reduce((a, r) => a + f(r), 0);
     res.json({
@@ -388,7 +394,7 @@ const getEwtAccuracy = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
-
+ 
 module.exports = {
   getSummary, getByServicePoint, getTrend, listTokens, getTokenTimeline, exportCsv,
   getByCategory, getEwtAccuracy,

@@ -119,16 +119,26 @@ export default function Clinic() {
   const [queue, setQueue] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [categories, setCategories] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
+  const [servicePoints, setServicePoints] = useState([]);
   const [followFor, setFollowFor] = useState(null); // the patient just completed
   const [follow, setFollow] = useState({ date: '', time: '09:00', category_id: '' });
   const [followDone, setFollowDone] = useState('');
+  const [refer, setRefer] = useState({ service_point_id: '', category_id: '' });
+  const [referDone, setReferDone] = useState('');
 
   useEffect(() => {
-    api.get('/visits/categories')
-      .then((res) => setCategories(res.data.filter((c) => String(c.service_point_id) === String(spId))))
-      .catch(() => {});
-  }, [spId]);
+    api.get('/visits/categories').then((res) => setAllCategories(res.data)).catch(() => {});
+    api.get('/visits/service-points').then((res) => setServicePoints(res.data)).catch(() => {});
+  }, []);
+
+  const categories = allCategories.filter((c) => String(c.service_point_id) === String(spId));
+  const otherPoints = servicePoints.filter((sp) => String(sp.id) !== String(spId));
+  const typesFor = (id) => allCategories.filter((c) => String(c.service_point_id) === String(id));
+  const defaultTypeFor = (id) => {
+    const list = typesFor(id);
+    return String((list.find((c) => c.is_default) || list[0] || {}).id || '');
+  };
 
   // Offer the visit type that looks like a follow-up, otherwise the usual one
   const followCategory = () => {
@@ -143,8 +153,15 @@ export default function Clinic() {
     try {
       await api.put(`/queue/tokens/${token.id}/complete`);
       setFollowDone('');
+      setReferDone('');
       setFollowFor({ id: token.id, token_number: token.token_number, full_name: token.full_name });
       setFollow({ date: lusakaDate(7), time: '09:00', category_id: followCategory() });
+      // Most outpatient visits end at the pharmacy, so offer it first
+      const target = otherPoints.find((sp) => sp.code === 'PHA') || otherPoints[0];
+      setRefer({
+        service_point_id: target ? String(target.id) : '',
+        category_id: target ? defaultTypeFor(target.id) : '',
+      });
       await load();
     } catch (err) {
       setError(err.response?.data?.error || 'That action failed.');
@@ -169,9 +186,30 @@ export default function Clinic() {
           ? 'Reminder SMS will be sent the day before and 2 hours before.'
           : 'No phone number, so no reminder SMS.')
       );
-      setFollowFor(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not book the follow-up.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const referPatient = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.post('/referrals', {
+        token_id: followFor.id,
+        service_point_id: parseInt(refer.service_point_id),
+        category_id: refer.category_id ? parseInt(refer.category_id) : undefined,
+      });
+      const e = res.data.ewt;
+      setReferDone(
+        `${res.data.token.token_number} issued at ${res.data.service_point} · ` +
+        `${e.patients_ahead} ahead · wait ${e.ewt_low}–${e.ewt_high} min. ` +
+        (res.data.patient.phone_number ? 'SMS sent to the patient.' : 'No phone number: tell the patient the token.')
+      );
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not refer the patient.');
     } finally {
       setBusy(false);
     }
@@ -292,39 +330,89 @@ export default function Clinic() {
           <div style={S.heroEmpty}>No patient called. Press "Call next" to begin.</div>
         )}
 
-        {followDone && <div style={S.done}>{followDone}</div>}
-
         {followFor && (
           <div style={S.followCard}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1C1E' }}>
-              {followFor.token_number} completed. Book a follow-up visit?
-            </div>
-            <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 4 }}>
-              {followFor.full_name} · reminders go by SMS the day before and 2 hours before
-            </div>
-            <div style={S.followRow}>
-              <label style={S.followField}>Date
-                <input type="date" style={S.followInput} value={follow.date} min={lusakaDate(1)}
-                  onChange={(e) => setFollow({ ...follow, date: e.target.value })} />
-              </label>
-              <label style={S.followField}>Time
-                <input type="time" style={S.followInput} value={follow.time}
-                  onChange={(e) => setFollow({ ...follow, time: e.target.value })} />
-              </label>
-              <label style={S.followField}>Visit type
-                <select style={S.followInput} value={follow.category_id}
-                  onChange={(e) => setFollow({ ...follow, category_id: e.target.value })}>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </label>
-              <button style={S.followBtn} disabled={busy || !follow.date || !follow.time}
-                onClick={bookFollowUp}>
-                Book follow-up
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1C1E' }}>
+                {followFor.token_number} completed · {followFor.full_name}
+              </div>
               <button style={S.skipBtn} disabled={busy} onClick={() => setFollowFor(null)}>
-                No follow-up
+                Done
               </button>
             </div>
+
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E', marginTop: 14 }}>
+              Follow-up visit
+            </div>
+            {followDone ? (
+              <div style={{ ...S.done, margin: '8px 0 0' }}>{followDone}</div>
+            ) : (
+              <>
+                <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}>
+                  Optional · reminders go by SMS the day before and 2 hours before
+                </div>
+                <div style={S.followRow}>
+                  <label style={S.followField}>Date
+                    <input type="date" style={S.followInput} value={follow.date} min={lusakaDate(1)}
+                      onChange={(e) => setFollow({ ...follow, date: e.target.value })} />
+                  </label>
+                  <label style={S.followField}>Time
+                    <input type="time" style={S.followInput} value={follow.time}
+                      onChange={(e) => setFollow({ ...follow, time: e.target.value })} />
+                  </label>
+                  <label style={S.followField}>Visit type
+                    <select style={S.followInput} value={follow.category_id}
+                      onChange={(e) => setFollow({ ...follow, category_id: e.target.value })}>
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </label>
+                  <button style={S.followBtn} disabled={busy || !follow.date || !follow.time}
+                    onClick={bookFollowUp}>
+                    Book follow-up
+                  </button>
+                </div>
+              </>
+            )}
+
+            {otherPoints.length > 0 && (
+              <>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E', marginTop: 18 }}>
+                  Send to another service point now
+                </div>
+                {referDone ? (
+                  <div style={{ ...S.done, margin: '8px 0 0' }}>{referDone}</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}>
+                      Optional · the patient joins that queue straight away, without going back to reception
+                    </div>
+                    <div style={S.followRow}>
+                      <label style={S.followField}>Service point
+                        <select style={S.followInput} value={refer.service_point_id}
+                          onChange={(e) => setRefer({
+                            service_point_id: e.target.value,
+                            category_id: defaultTypeFor(e.target.value),
+                          })}>
+                          {otherPoints.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                        </select>
+                      </label>
+                      <label style={S.followField}>Visit type
+                        <select style={S.followInput} value={refer.category_id}
+                          onChange={(e) => setRefer({ ...refer, category_id: e.target.value })}>
+                          {typesFor(refer.service_point_id).map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button style={{ ...S.followBtn, backgroundColor: '#007AFF' }}
+                        disabled={busy || !refer.service_point_id} onClick={referPatient}>
+                        Send
+                      </button>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
 

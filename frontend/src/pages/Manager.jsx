@@ -309,6 +309,12 @@ export default function Manager() {
 
           {timeline && (
             <>
+              {(timeline.token.referred_from || timeline.token.referred_to) && (
+                <div style={{ ...S.hint, margin: '0 0 8px' }}>
+                  {timeline.token.referred_from ? `Referred from ${timeline.token.referred_from}. ` : ''}
+                  {timeline.token.referred_to ? `Referred on to ${timeline.token.referred_to}.` : ''}
+                </div>
+              )}
               {timeline.events.map((e, i) => (
                 <div key={i} style={S.tlRow}>
                   <div style={S.tlTime}>{clock(e.event_time)}</div>
