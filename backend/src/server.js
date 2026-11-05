@@ -21,6 +21,8 @@ const appointmentRoutes = require('./routes/appointments');
 app.use('/api/appointments', appointmentRoutes);
 const patientRoutes = require('./routes/patients');
 app.use('/api/patients', patientRoutes);
+const adminRoutes = require('./routes/admin');
+app.use('/api/admin', adminRoutes);
  
 // Follow-up booking from the clinician screen (reminders are sent by the reminder job)
 const { authenticate, authorize } = require('./middleware/auth');
