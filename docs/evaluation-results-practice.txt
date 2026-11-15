@@ -1,0 +1,42 @@
+
+================ RESULTS ================
+Date: 11/11/2026   Mode: practice x0.05
+
+Table A: per patient (times in Lusaka time, minutes rounded to 0.1)
+Patient,Token,Visit type,Urgent,Planned min,Told range,Estimate min,Arrived,Called,Started,Completed,System wait,Recorded wait,Difference,Within 2 min,Inside range,Estimate error
+P01,GOP-001,Follow-up / medication refill,no,6,0-5,0,16:32:24,16:32:25,16:32:28,16:32:46,0.1,0.1,0,yes,yes,0.1
+P02,GOP-002,New complaint,no,14,5-10,6.5,16:32:24,16:32:46,16:32:49,16:33:31,0.4,0.4,0,yes,no,-6.1
+P03,GOP-003,Follow-up / medication refill,no,7,15-25,19,16:32:24,16:33:31,16:33:34,16:33:55,1.2,1.2,0,yes,no,-17.8
+P04,GOP-004,Chronic or complex review,no,35,20-35,25.3,16:32:39,16:34:34,16:34:37,16:36:22,2,2,0,yes,no,-23.3
+P05,GOP-005,New complaint,no,11,35-65,46.4,16:32:54,16:36:22,16:36:25,16:36:58,3.5,3.5,0,yes,no,-42.9
+P06,GOP-006,Follow-up / medication refill,no,5,45-80,58.9,16:32:54,16:36:59,16:37:02,16:37:17,4.1,4.1,0,yes,no,-54.8
+P07,GOP-007,New complaint,no,13,50-85,64.9,16:33:24,16:37:17,16:37:20,16:37:59,3.9,3.9,0,yes,no,-61
+P08,GOP-008,New complaint,yes,12,5-10,6.4,16:33:39,16:33:55,16:33:58,16:34:34,0.3,0.3,0,yes,no,-6.1
+P09,GOP-009,Chronic or complex review,no,20,60-105,77.7,16:33:54,16:37:59,16:38:02,16:39:02,4.1,4.1,0,yes,no,-73.6
+P10,GOP-010,Follow-up / medication refill,no,8,80-140,105.2,16:33:54,16:39:02,16:39:05,16:39:29,5.2,5.2,0,yes,no,-100
+
+Table B: analytics correctness (system wait vs independently recorded wait)
+Within +/-2 minutes: 10 of 10 (100%)  [criterion: at least 80%]
+
+Table C: estimate accuracy (actual wait vs estimate given at registration)
+Patients evaluated: 10
+Mean absolute error: 38.6 min
+Mean error (positive = waited longer than told): -38.5 min
+Actual wait inside the range told: 1 of 10 (10%)
+Within 5 minutes of the estimate: 1 of 10 (10%)
+
+Table D: registration response time (API, from sending to token returned)
+P01: 75 ms
+P02: 56 ms
+P03: 37 ms
+P04: 37 ms
+P05: 44 ms
+P06: 25 ms
+P07: 97 ms
+P08: 40 ms
+P09: 85 ms
+P10: 10 ms
+
+Table E: SMS log for these patients
+called,sent,10
+registered,sent,10
