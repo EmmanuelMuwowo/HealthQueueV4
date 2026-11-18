@@ -1,4 +1,4 @@
-HealthQueue test report, 13/11/2026, 14:00:15 (Lusaka time)
+HealthQueue test report, 18/11/2026, 18:04:01 (Lusaka time)
 
 EWT unit tests       14 passed, 0 failed   OK
 Skip and re-queue    11 passed, 0 failed   OK
@@ -15,85 +15,85 @@ TAP version 13
 # Subtest: EWMA weights the newest consultation by 0.3
 ok 1 - EWMA weights the newest consultation by 0.3
   ---
-  duration_ms: 1.8655
+  duration_ms: 0.6995
   type: 'test'
   ...
 # Subtest: EWMA of identical durations is that duration
 ok 2 - EWMA of identical durations is that duration
   ---
-  duration_ms: 0.1985
+  duration_ms: 0.1078
   type: 'test'
   ...
 # Subtest: Fewer than 3 completed: the category default is used
 ok 3 - Fewer than 3 completed: the category default is used
   ---
-  duration_ms: 0.2213
+  duration_ms: 0.1209
   type: 'test'
   ...
 # Subtest: 3 or more completed: the EWMA is used
 ok 4 - 3 or more completed: the EWMA is used
   ---
-  duration_ms: 1.4311
+  duration_ms: 0.6214
   type: 'test'
   ...
 # Subtest: The window size is 10
 ok 5 - The window size is 10
   ---
-  duration_ms: 0.2269
+  duration_ms: 0.1106
   type: 'test'
   ...
 # Subtest: Proposal example: 3 patients ahead x 8 minutes = 24
 ok 6 - Proposal example: 3 patients ahead x 8 minutes = 24
   ---
-  duration_ms: 0.4611
+  duration_ms: 0.2294
   type: 'test'
   ...
 # Subtest: Each patient ahead counts their own visit type (5 + 12 + 25 = 42)
 ok 7 - Each patient ahead counts their own visit type (5 + 12 + 25 = 42)
   ---
-  duration_ms: 0.2315
+  duration_ms: 0.1249
   type: 'test'
   ...
 # Subtest: Two clinicians and a 10% buffer: 42 / 2 x 1.1 = 23.1
 ok 8 - Two clinicians and a 10% buffer: 42 / 2 x 1.1 = 23.1
   ---
-  duration_ms: 0.3033
+  duration_ms: 0.1639
   type: 'test'
   ...
 # Subtest: Current consultation counts only its remaining time (6 of 8 used: 2 + 2 x 8 = 18)
 ok 9 - Current consultation counts only its remaining time (6 of 8 used: 2 + 2 x 8 = 18)
   ---
-  duration_ms: 1.3785
+  duration_ms: 0.8404
   type: 'test'
   ...
 # Subtest: An overrunning consultation still counts 20% of its AHT
 ok 10 - An overrunning consultation still counts 20% of its AHT
   ---
-  duration_ms: 0.4526
+  duration_ms: 0.1505
   type: 'test'
   ...
 # Subtest: A called patient (not started) counts a full AHT
 ok 11 - A called patient (not started) counts a full AHT
   ---
-  duration_ms: 0.2004
+  duration_ms: 0.1057
   type: 'test'
   ...
 # Subtest: Nobody ahead: estimate 0, band 0 to 5
 ok 12 - Nobody ahead: estimate 0, band 0 to 5
   ---
-  duration_ms: 0.214
+  duration_ms: 0.0764
   type: 'test'
   ...
 # Subtest: Band: 80% to 130%, rounded outwards to 5 minutes (22 -> 15 to 30)
 ok 13 - Band: 80% to 130%, rounded outwards to 5 minutes (22 -> 15 to 30)
   ---
-  duration_ms: 1.5474
+  duration_ms: 0.5613
   type: 'test'
   ...
 # Subtest: Band always contains the estimate
 ok 14 - Band always contains the estimate
   ---
-  duration_ms: 0.1783
+  duration_ms: 0.0842
   type: 'test'
   ...
 1..14
@@ -104,7 +104,7 @@ ok 14 - Band always contains the estimate
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 172.3244
+# duration_ms 98.9153
 
 ===== testSkip.js =====
 PASS  Register Skip Test A
@@ -125,15 +125,15 @@ PASS  Skipping a waiting patient is refused (409)
 PASS  Token list loads
 PASS  Timeline loads
 
-Timeline for GOP-002 (General Outpatient)
-  11:17:42  arrived  (Grace Mulenga)
-  14:00:17  called  (Dr. Banda)
-  14:00:17  consultation_started  (Dr. Banda)
-  14:00:17  completed  (Dr. Banda)
+Timeline for GOP-005 (General Outpatient)
+  17:49:42  arrived  (Grace Mulenga)
+  18:04:01  called  (Dr. Banda)
+  18:04:01  consultation_started  (Dr. Banda)
+  18:04:01  completed  (Dr. Banda)
 Intervals: {
-  wait_until_called_minutes: 162.6,
+  wait_until_called_minutes: 14.3,
   call_to_start_minutes: 0,
-  total_wait_minutes: 162.6,
+  total_wait_minutes: 14.3,
   service_minutes: 0
 } 
 
@@ -155,7 +155,7 @@ PASS  CSV row count equals tokens in the trend chart
 PASS  Clinician is refused (403)
 PASS  Bad date is refused (400)
 
-Day 2026-11-13: CSV average wait 162.60 min, dashboard 162.6 min
+Day 2026-11-18: CSV average wait 12.45 min, dashboard 12.5 min
 PASS  CSV average wait matches the dashboard (within 0.15 min)
 
 7 passed, 0 failed

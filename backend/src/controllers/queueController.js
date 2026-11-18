@@ -1,6 +1,6 @@
 const pool = require('../db');
 const { estimateQueue } = require('../services/queueService');
-const { deliver, calledMessage } = require('../services/smsService');
+const { deliver, calledMessage, almostNextMessage } = require('../services/smsService');
 
 // Clinicians can only touch their own service point
 const canAccess = (staff, spId) =>
@@ -114,6 +114,51 @@ const notifyCalled = async (token) => {
     }),
   });
 };
+// "Almost your turn" SMS.
+// After each call, the patients now in the first ALMOST_NEXT_POSITIONS places (default 2)
+// get one message so they can return to the waiting area in time. Patients who registered
+// less than ALMOST_NEXT_MIN_AGE_MIN minutes ago (default 5) are skipped: their registration
+// SMS already told them the wait is short. Each patient gets this message at most once.
+const notifyAlmostNext = async (spId) => {
+  const positions = parseInt(process.env.ALMOST_NEXT_POSITIONS || '2');
+  const minAge = parseFloat(process.env.ALMOST_NEXT_MIN_AGE_MIN || '5');
+  if (!(positions > 0)) return;
+
+  const front = await pool.query(
+    `SELECT qt.id, qt.token_number, qt.arrival_time, qt.almost_next_sent_at,
+            p.phone_number, sp.name AS service_point
+     FROM queue_tokens qt
+     JOIN visits v ON v.id = qt.visit_id
+     JOIN patients p ON p.id = v.patient_id
+     JOIN service_points sp ON sp.id = qt.service_point_id
+     WHERE qt.service_point_id = $1 AND qt.queue_date = CURRENT_DATE AND qt.status = 'waiting'
+     ORDER BY CASE WHEN qt.priority = 'urgent' THEN 0 ELSE 1 END, qt.sequence_no
+     LIMIT $2`,
+    [spId, positions]
+  );
+
+  for (const t of front.rows) {
+    if (!t.phone_number || t.almost_next_sent_at) continue;
+    const ageMin = (Date.now() - new Date(t.arrival_time).getTime()) / 60000;
+    if (ageMin < minAge) continue;
+
+    // Claim the message first, so two quick calls can never send it twice
+    const claim = await pool.query(
+      `UPDATE queue_tokens SET almost_next_sent_at = NOW()
+       WHERE id = $1 AND almost_next_sent_at IS NULL RETURNING id`,
+      [t.id]
+    );
+    if (claim.rows.length === 0) continue;
+
+    await deliver({
+      tokenId: t.id,
+      kind: 'almost_next',
+      phone: t.phone_number,
+      message: almostNextMessage({ token_number: t.token_number, service_point: t.service_point }),
+    });
+  }
+};
+
 // POST /api/queue/:servicePointId/call-next
 const callNext = async (req, res) => {
   const spId = parseInt(req.params.servicePointId);
@@ -163,6 +208,7 @@ const callNext = async (req, res) => {
 
     await client.query('COMMIT');
     notifyCalled(token).catch(console.error);
+    notifyAlmostNext(spId).catch(console.error);
     res.json(token);
   } catch (err) {
     await client.query('ROLLBACK');

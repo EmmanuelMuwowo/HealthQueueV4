@@ -3,107 +3,23 @@ import api from '../services/api';
 import TopBar from '../components/TopBar';
 
 const S = {
-  page: {
-    minHeight: '100vh', backgroundColor: '#F2F2F7',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  body: { maxWidth: 800, margin: '0 auto', padding: '28px 20px' },
-  heading: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  h1: { fontSize: 24, fontWeight: 700, color: '#1C1C1E', margin: 0 },
-  callBtn: (disabled) => ({
-    padding: '12px 24px', backgroundColor: disabled ? '#C7C7CC' : '#34C759', color: '#fff',
-    border: 'none', borderRadius: 10, fontSize: 16, fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-  }),
-  error: {
-    color: '#FF3B30', fontSize: 14, backgroundColor: '#FFF2F2',
-    padding: '10px 14px', borderRadius: 8, marginBottom: 16,
-  },
-  hero: {
-    background: 'linear-gradient(135deg, #007AFF 0%, #0055D4 100%)', borderRadius: 20,
-    padding: 28, color: '#fff', marginBottom: 24,
-  },
-  heroEmpty: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 28, color: '#8E8E93',
-    textAlign: 'center', marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-  },
-  heroLabel: { fontSize: 11, fontWeight: 700, letterSpacing: 1, opacity: 0.75, textTransform: 'uppercase' },
-  heroToken: { fontSize: 52, fontWeight: 700, margin: '4px 0' },
-  heroActions: { display: 'flex', alignItems: 'center', gap: 12, marginTop: 18 },
-  heroBtn: {
-    padding: '12px 24px', backgroundColor: '#fff', color: '#0055D4', border: 'none',
-    borderRadius: 10, fontSize: 16, fontWeight: 700, cursor: 'pointer',
-  },
-  statusPill: {
-    padding: '6px 14px', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)',
-    fontSize: 13, fontWeight: 600,
-  },
-  sectionLabel: {
-    fontSize: 13, fontWeight: 600, color: '#8E8E93', textTransform: 'uppercase',
-    letterSpacing: 0.5, marginBottom: 10,
-  },
-  row: {
-    backgroundColor: '#fff', borderRadius: 12, padding: '14px 18px', marginBottom: 8,
-    display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-  },
-  rowToken: { fontSize: 20, fontWeight: 700, color: '#007AFF', minWidth: 90 },
-  rowName: { flex: 1, fontSize: 15, fontWeight: 500, color: '#1C1C1E' },
-  urgentBadge: {
-    padding: '3px 10px', borderRadius: 20, backgroundColor: '#FFE5E5',
-    color: '#CC0000', fontSize: 12, fontWeight: 600,
-  },
-  ewt: { fontSize: 13, color: '#8E8E93', textAlign: 'right', minWidth: 110 },
-  empty: {
-    textAlign: 'center', padding: 40, color: '#8E8E93',
-    backgroundColor: '#fff', borderRadius: 12,
-  },
-  note: { fontSize: 12, color: '#8E8E93', marginTop: 16, textAlign: 'center' },
-
-    noShowBtn: {
-    padding: '12px 20px', backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff',
-    border: '1px solid rgba(255,255,255,0.5)', borderRadius: 10, fontSize: 15,
-    fontWeight: 600, cursor: 'pointer',
-  },
-  requeueBtn: {
-    padding: '7px 14px', backgroundColor: '#E3F2FD', color: '#1565C0', border: 'none',
-    borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-  },
-  progressText: { fontSize: 14, fontWeight: 600, marginTop: 14 },
-  progressTrack: {
-    height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)',
-    marginTop: 6, overflow: 'hidden',
-  },
+  page: { maxWidth: 880 },
+  heading: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' },
+  callBtn: { minHeight: 50, padding: '10px 28px', fontSize: 17, borderRadius: 12 },
+  hero: { marginBottom: 24 },
+  heroActions: { display: 'flex', alignItems: 'center', gap: 10, marginTop: 20, flexWrap: 'wrap' },
+  heroBtn: { background: '#fff', color: 'var(--hq-blue)', minHeight: 46, padding: '10px 22px', fontSize: 16 },
+  heroGhost: { background: 'rgba(255,255,255,0.18)', color: '#fff', minHeight: 46, padding: '10px 18px', fontSize: 15 },
+  heroPill: { background: 'rgba(255,255,255,0.2)', color: '#fff', marginLeft: 'auto' },
+  progressText: { fontSize: 14, fontWeight: 600, marginTop: 18 },
+  progressTrack: { height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.25)', marginTop: 8, overflow: 'hidden' },
   progressFill: (pct, over) => ({
-    height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4,
-    backgroundColor: over ? '#FF9500' : '#fff',
+    height: '100%', width: `${Math.min(pct, 100)}%`, borderRadius: 4, background: over ? '#FF9F0A' : '#fff',
+    transition: 'width 600ms',
   }),
-  ahtList: {
-    backgroundColor: '#fff', borderRadius: 12, padding: '12px 16px', marginTop: 24,
-    fontSize: 13, color: '#3C3C43', boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-  },
-  ahtRow: { display: 'flex', justifyContent: 'space-between', padding: '4px 0' },
-  followCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 24,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)', border: '2px solid #34C759',
-  },
-  followRow: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 },
-  followField: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#3C3C43' },
-  followInput: {
-    padding: '9px 10px', borderRadius: 8, border: '1px solid #E5E5EA', fontSize: 14,
-    backgroundColor: '#FAFAFA',
-  },
-  followBtn: {
-    padding: '10px 18px', backgroundColor: '#34C759', color: '#fff', border: 'none',
-    borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-  },
-  skipBtn: {
-    padding: '10px 14px', backgroundColor: '#F2F2F7', color: '#3C3C43', border: 'none',
-    borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-  },
-  done: {
-    color: '#1A7A5E', fontSize: 14, backgroundColor: '#E8F8F2',
-    padding: '10px 14px', borderRadius: 8, marginBottom: 16,
-  },
+  emptyHero: { marginBottom: 24, textAlign: 'center', padding: '36px 20px' },
+  followGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, alignItems: 'end', marginTop: 12 },
+  token: { fontSize: 18, fontWeight: 700, color: 'var(--hq-blue)', width: 92, flex: 'none' },
 };
 
 // YYYY-MM-DD in Lusaka time, `days` from today
@@ -245,9 +161,11 @@ export default function Clinic() {
 
   if (!queue) {
     return (
-      <div style={S.page}>
-        <TopBar subtitle="Clinic · Queue" />
-        <div style={S.body}>{error ? <div style={S.error}>{error}</div> : 'Loading queue...'}</div>
+      <div>
+        <TopBar subtitle="Clinic" />
+        <main className="hq-page" style={S.page}>
+          {error ? <div className="hq-notice is-error" role="alert">{error}</div> : <div className="hq-empty">Loading the queue…</div>}
+        </main>
       </div>
     );
   }
@@ -266,44 +184,49 @@ export default function Clinic() {
   const over = showProgress && elapsed > typical;
 
   return (
-    <div style={S.page}>
-      <TopBar subtitle={`Clinic · ${queue.service_point.name}`} />
-      <div style={S.body}>
+    <div>
+      <TopBar subtitle={`Clinic, ${queue.service_point.name}`} />
+      <main className="hq-page" style={S.page}>
         <div style={S.heading}>
-          <h1 style={S.h1}>{queue.service_point.name}</h1>
-          <button
-            style={S.callBtn(busy || !!current)}
+          <div>
+            <h1 className="hq-large-title">{queue.service_point.name}</h1>
+            <div className="hq-footnote hq-num" style={{ marginTop: 4 }}>
+              {queue.waiting.length} waiting{(queue.skipped || []).length ? `, ${queue.skipped.length} skipped today` : ''}
+            </div>
+          </div>
+          <button type="button" className="hq-btn hq-btn-primary" style={S.callBtn}
             disabled={busy || !!current}
-            onClick={() => act(() => api.post(`/queue/${spId}/call-next`))}
-          >
+            title={current ? 'Complete or mark the current patient as a no-show first' : undefined}
+            onClick={() => act(() => api.post(`/queue/${spId}/call-next`))}>
             Call next
           </button>
         </div>
 
-        {error && <div style={S.error}>{error}</div>}
+        {error && <div className="hq-notice is-error" role="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
         {current ? (
-          <div style={S.hero}>
-            <div style={S.heroLabel}>Now serving</div>
-            <div style={S.heroToken}>{current.token_number}</div>
-            <div style={{ fontSize: 18 }}>{current.full_name}</div>
-            {current.category_name && (
-              <div style={{ fontSize: 13, opacity: 0.85, marginTop: 2 }}>{current.category_name}</div>
-            )}
+          <section className="hq-token-card" style={S.hero} aria-live="polite">
+            <div style={{ fontSize: 15, opacity: 0.85 }}>
+              {current.status === 'called' ? 'Called, waiting for the patient' : 'Now serving'}
+              {current.category_name ? `, ${current.category_name}` : ''}
+            </div>
+            <div className="hq-token" style={{ margin: '8px 0 6px' }}>{current.token_number}</div>
+            <div style={{ fontSize: 19, fontWeight: 600 }}>{current.full_name}</div>
+
             <div style={S.heroActions}>
               {current.status === 'called' ? (
-                <button style={S.heroBtn} disabled={busy}
+                <button type="button" className="hq-btn" style={S.heroBtn} disabled={busy}
                   onClick={() => act(() => api.put(`/queue/tokens/${current.id}/start`))}>
                   Start consultation
                 </button>
               ) : (
-                <button style={S.heroBtn} disabled={busy}
+                <button type="button" className="hq-btn" style={S.heroBtn} disabled={busy}
                   onClick={() => complete(current)}>
                   Complete
                 </button>
               )}
-                            {current.status === 'called' && (
-                <button style={S.noShowBtn} disabled={busy}
+              {current.status === 'called' && (
+                <button type="button" className="hq-btn" style={S.heroGhost} disabled={busy}
                   onClick={() => {
                     if (window.confirm(`Mark ${current.token_number} as a no-show?`)) {
                       act(() => api.put(`/queue/tokens/${current.id}/skip`));
@@ -312,62 +235,72 @@ export default function Clinic() {
                   No-show
                 </button>
               )}
-              <span style={S.statusPill}>{current.status.replace('_', ' ')}</span>
+              <span className="hq-pill" style={S.heroPill}>
+                {current.status === 'called' ? 'Called' : 'In consultation'}
+              </span>
             </div>
+
             {showProgress && (
               <>
-                <div style={S.progressText}>
-                  {Math.floor(elapsed)} of {Math.round(typical)} min typical
-                  {over ? ' · running over' : ''}
+                <div className="hq-num" style={S.progressText}>
+                  {Math.floor(elapsed)} of {Math.round(typical)} min typical{over ? ', running over' : ''}
                 </div>
-                <div style={S.progressTrack}>
+                <div style={S.progressTrack} role="progressbar" aria-valuemin={0} aria-valuemax={100}
+                  aria-valuenow={Math.min(Math.round(pct), 100)}>
                   <div style={S.progressFill(pct, over)} />
                 </div>
               </>
             )}
-          </div>
+          </section>
         ) : (
-          <div style={S.heroEmpty}>No patient called. Press "Call next" to begin.</div>
+          <section className="hq-panel" style={S.emptyHero}>
+            <div className="hq-headline">No patient called</div>
+            <div className="hq-footnote" style={{ marginTop: 4 }}>
+              {queue.waiting.length > 0 ? 'Press Call next to call the first patient in the queue.' : 'The queue is empty. New patients appear here automatically.'}
+            </div>
+          </section>
         )}
 
         {followFor && (
-          <div style={S.followCard}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1C1E' }}>
-                {followFor.token_number} completed · {followFor.full_name}
+          <section className="hq-panel" style={{ marginBottom: 24, borderTop: '4px solid #34C759' }} aria-label="After the consultation">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div>
+                <div className="hq-headline">{followFor.token_number} completed</div>
+                <div className="hq-footnote">{followFor.full_name}</div>
               </div>
-              <button style={S.skipBtn} disabled={busy} onClick={() => setFollowFor(null)}>
+              <button type="button" className="hq-btn hq-btn-secondary" disabled={busy} onClick={() => setFollowFor(null)}>
                 Done
               </button>
             </div>
 
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E', marginTop: 14 }}>
-              Follow-up visit
-            </div>
+            <div className="hq-headline" style={{ fontSize: 15, marginTop: 18 }}>Book a follow-up visit</div>
             {followDone ? (
-              <div style={{ ...S.done, margin: '8px 0 0' }}>{followDone}</div>
+              <div className="hq-notice is-success" style={{ marginTop: 8 }}>{followDone}</div>
             ) : (
               <>
-                <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}>
-                  Optional · reminders go by SMS the day before and 2 hours before
+                <div className="hq-caption" style={{ marginTop: 2 }}>
+                  Optional. Reminder SMS are sent the day before and 2 hours before.
                 </div>
-                <div style={S.followRow}>
-                  <label style={S.followField}>Date
-                    <input type="date" style={S.followInput} value={follow.date} min={lusakaDate(1)}
+                <div style={S.followGrid}>
+                  <div className="hq-field" style={{ marginBottom: 0 }}>
+                    <label htmlFor="f_date">Date</label>
+                    <input id="f_date" type="date" className="hq-input" value={follow.date} min={lusakaDate(1)}
                       onChange={(e) => setFollow({ ...follow, date: e.target.value })} />
-                  </label>
-                  <label style={S.followField}>Time
-                    <input type="time" style={S.followInput} value={follow.time}
+                  </div>
+                  <div className="hq-field" style={{ marginBottom: 0 }}>
+                    <label htmlFor="f_time">Time</label>
+                    <input id="f_time" type="time" className="hq-input" value={follow.time}
                       onChange={(e) => setFollow({ ...follow, time: e.target.value })} />
-                  </label>
-                  <label style={S.followField}>Visit type
-                    <select style={S.followInput} value={follow.category_id}
+                  </div>
+                  <div className="hq-field" style={{ marginBottom: 0 }}>
+                    <label htmlFor="f_cat">Visit type</label>
+                    <select id="f_cat" className="hq-select" value={follow.category_id}
                       onChange={(e) => setFollow({ ...follow, category_id: e.target.value })}>
                       {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                  </label>
-                  <button style={S.followBtn} disabled={busy || !follow.date || !follow.time}
-                    onClick={bookFollowUp}>
+                  </div>
+                  <button type="button" className="hq-btn hq-btn-primary" style={{ minHeight: 44 }}
+                    disabled={busy || !follow.date || !follow.time} onClick={bookFollowUp}>
                     Book follow-up
                   </button>
                 </div>
@@ -376,105 +309,106 @@ export default function Clinic() {
 
             {otherPoints.length > 0 && (
               <>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#1C1C1E', marginTop: 18 }}>
-                  Send to another service point now
-                </div>
+                <div className="hq-headline" style={{ fontSize: 15, marginTop: 22 }}>Send to another service point</div>
                 {referDone ? (
-                  <div style={{ ...S.done, margin: '8px 0 0' }}>{referDone}</div>
+                  <div className="hq-notice is-success" style={{ marginTop: 8 }}>{referDone}</div>
                 ) : (
                   <>
-                    <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}>
-                      Optional · the patient joins that queue straight away, without going back to reception
+                    <div className="hq-caption" style={{ marginTop: 2 }}>
+                      Optional. The patient joins that queue straight away, without going back to reception.
                     </div>
-                    <div style={S.followRow}>
-                      <label style={S.followField}>Service point
-                        <select style={S.followInput} value={refer.service_point_id}
-                          onChange={(e) => setRefer({
-                            service_point_id: e.target.value,
-                            category_id: defaultTypeFor(e.target.value),
-                          })}>
+                    <div style={S.followGrid}>
+                      <div className="hq-field" style={{ marginBottom: 0 }}>
+                        <label htmlFor="r_sp">Service point</label>
+                        <select id="r_sp" className="hq-select" value={refer.service_point_id}
+                          onChange={(e) => setRefer({ service_point_id: e.target.value, category_id: defaultTypeFor(e.target.value) })}>
                           {otherPoints.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                         </select>
-                      </label>
-                      <label style={S.followField}>Visit type
-                        <select style={S.followInput} value={refer.category_id}
+                      </div>
+                      <div className="hq-field" style={{ marginBottom: 0 }}>
+                        <label htmlFor="r_cat">Visit type</label>
+                        <select id="r_cat" className="hq-select" value={refer.category_id}
                           onChange={(e) => setRefer({ ...refer, category_id: e.target.value })}>
                           {typesFor(refer.service_point_id).map((c) => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
-                      </label>
-                      <button style={{ ...S.followBtn, backgroundColor: '#007AFF' }}
+                      </div>
+                      <button type="button" className="hq-btn hq-btn-primary" style={{ minHeight: 44 }}
                         disabled={busy || !refer.service_point_id} onClick={referPatient}>
-                        Send
+                        Send patient
                       </button>
                     </div>
                   </>
                 )}
               </>
             )}
+          </section>
+        )}
+
+        <div className="hq-group-title hq-num">Waiting ({queue.waiting.length})</div>
+        {queue.waiting.length === 0 ? (
+          <div className="hq-group"><div className="hq-empty">No patients waiting.</div></div>
+        ) : (
+          <div className="hq-group">
+            {queue.waiting.map((t) => (
+              <div key={t.id} className="hq-row">
+                <div style={S.token}>{t.token_number}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 500 }}>{t.full_name}</div>
+                  {t.category_name && <div className="hq-caption">{t.category_name}</div>}
+                </div>
+                {t.priority === 'urgent' && <span className="hq-pill is-red">Urgent</span>}
+                <div className="hq-footnote hq-num" style={{ textAlign: 'right', minWidth: 120 }}>
+                  {t.patients_ahead} ahead, {wait(t)}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
-        <div style={S.sectionLabel}>Waiting ({queue.waiting.length})</div>
-        {queue.waiting.length === 0 ? (
-          <div style={S.empty}>No patients waiting.</div>
-        ) : (
-          queue.waiting.map((t) => (
-            <div key={t.id} style={S.row}>
-              <div style={S.rowToken}>{t.token_number}</div>
-                <div style={S.rowName}>
-                {t.full_name}
-                {t.category_name && (
-                  <div style={{ fontSize: 12, color: '#8E8E93', fontWeight: 400 }}>{t.category_name}</div>
-                )}
-              </div>
-              {t.priority === 'urgent' && <span style={S.urgentBadge}>URGENT</span>}
-              <div style={S.ewt}>{t.patients_ahead} ahead · {wait(t)}</div>
-            </div>
-          ))
-        )}
-
-                {(queue.skipped || []).length > 0 && (
+        {(queue.skipped || []).length > 0 && (
           <>
-            <div style={{ ...S.sectionLabel, marginTop: 24 }}>
-              Skipped today ({queue.skipped.length})
+            <div className="hq-group-title hq-num">Skipped today ({queue.skipped.length})</div>
+            <div className="hq-group">
+              {queue.skipped.map((t) => (
+                <div key={t.id} className="hq-row">
+                  <div style={{ ...S.token, color: 'var(--hq-label-2)' }}>{t.token_number}</div>
+                  <div style={{ flex: 1 }}>{t.full_name}</div>
+                  <button type="button" className="hq-btn hq-btn-secondary" style={{ minHeight: 34, padding: '6px 14px', fontSize: 14 }}
+                    disabled={busy} onClick={() => act(() => api.put(`/queue/tokens/${t.id}/requeue`))}>
+                    Re-queue
+                  </button>
+                </div>
+              ))}
             </div>
-            {queue.skipped.map((t) => (
-              <div key={t.id} style={S.row}>
-                <div style={S.rowToken}>{t.token_number}</div>
-                <div style={S.rowName}>{t.full_name}</div>
-                <button style={S.requeueBtn} disabled={busy}
-                  onClick={() => act(() => api.put(`/queue/tokens/${t.id}/requeue`))}>
-                  Re-queue
-                </button>
-              </div>
-            ))}
           </>
         )}
 
         {(queue.category_aht || []).length > 0 && (
-          <div style={S.ahtList}>
-            <div style={{ ...S.sectionLabel, marginBottom: 6 }}>Typical consultation time</div>
-            {queue.category_aht.map((c) => (
-              <div key={c.name} style={S.ahtRow}>
-                <span>{c.name}</span>
-                <span style={{ color: '#8E8E93' }}>
-                  {Math.round(c.aht_minutes)} min ·{' '}
-                  {c.source === 'ewma'
-                    ? `from ${c.sample_size} recent visit${c.sample_size === 1 ? '' : 's'}`
-                    : 'default (fewer than 3 recent visits)'}
-                </span>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="hq-group-title">Typical consultation time</div>
+            <div className="hq-group">
+              {queue.category_aht.map((c) => (
+                <div key={c.name} className="hq-row">
+                  <span className="hq-row-label">{c.name}</span>
+                  <span className="hq-row-value hq-num">
+                    {Math.round(c.aht_minutes)} min,{' '}
+                    {c.source === 'ewma'
+                      ? `from ${c.sample_size} recent visit${c.sample_size === 1 ? '' : 's'}`
+                      : 'default (fewer than 3 recent visits)'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
-        <div style={S.note}>
-          Wait = time left in the current consultation + the typical time of each patient ahead,
-          shown as a range · refreshes every 3 seconds
-        </div>
-      </div>
+        <p className="hq-caption" style={{ textAlign: 'center', marginTop: 18 }}>
+          Wait = time left in the current consultation plus the typical time of each patient ahead,
+          shown as a range. The queue refreshes every 3 seconds.
+        </p>
+      </main>
     </div>
   );
 }

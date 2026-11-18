@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 
 export const HOME_BY_ROLE = {
@@ -10,35 +10,19 @@ export const HOME_BY_ROLE = {
 };
 
 const S = {
-  page: {
-    minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#F2F2F7',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  page: { minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '32px 16px 64px' },
+  wrap: { width: '100%', maxWidth: 380, textAlign: 'center' },
+  mark: {
+    width: 64, height: 64, margin: '0 auto 20px', borderRadius: 16, background: 'var(--hq-blue)',
+    color: '#fff', display: 'grid', placeItems: 'center', fontSize: 30, fontWeight: 700,
+    boxShadow: '0 8px 24px rgba(0, 122, 255, 0.25)',
   },
-  card: {
-    backgroundColor: '#fff', borderRadius: 20, padding: '40px 36px', width: '100%',
-    maxWidth: 380, boxShadow: '0 4px 24px rgba(0,0,0,0.08)', boxSizing: 'border-box',
+  group: { textAlign: 'left', margin: '28px 0 16px' },
+  groupInput: {
+    width: '100%', border: 'none', outline: 'none', background: 'transparent',
+    fontSize: 16, padding: '14px 16px', minHeight: 50,
   },
-  logo: {
-    width: 52, height: 52, backgroundColor: '#007AFF', borderRadius: 14, color: '#fff',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontWeight: 700, fontSize: 24, marginBottom: 20,
-  },
-  title: { fontSize: 24, fontWeight: 700, color: '#1C1C1E', margin: '0 0 4px' },
-  sub: { fontSize: 14, color: '#8E8E93', margin: '0 0 28px' },
-  label: { fontSize: 13, fontWeight: 500, color: '#3C3C43', marginBottom: 6, display: 'block' },
-  input: {
-    width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid #E5E5EA',
-    fontSize: 15, backgroundColor: '#FAFAFA', boxSizing: 'border-box', outline: 'none', marginBottom: 14,
-  },
-  btn: {
-    width: '100%', padding: 14, backgroundColor: '#007AFF', color: '#fff', border: 'none',
-    borderRadius: 12, fontSize: 16, fontWeight: 600, cursor: 'pointer', marginTop: 8,
-  },
-  error: {
-    color: '#FF3B30', fontSize: 13, backgroundColor: '#FFF2F2',
-    padding: '10px 12px', borderRadius: 8, marginBottom: 14,
-  },
+  footer: { marginTop: 28 },
 };
 
 export default function Login() {
@@ -48,7 +32,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e?.preventDefault();
     if (!username || !password) {
       setError('Enter your username and password.');
       return;
@@ -64,7 +49,7 @@ export default function Login() {
       setError(
         err.response?.status === 401
           ? 'Incorrect username or password.'
-          : 'Cannot reach the server. Is the backend running?'
+          : 'Cannot reach the server. Check that the backend is running.'
       );
     } finally {
       setLoading(false);
@@ -72,23 +57,40 @@ export default function Login() {
   };
 
   return (
-    <div style={S.page}>
-      <div style={S.card}>
-        <div style={S.logo}>H</div>
-        <h1 style={S.title}>Staff Login</h1>
-        <p style={S.sub}>HealthQueue · Kalingalinga Clinic</p>
-        {error && <div style={S.error}>{error}</div>}
-        <label style={S.label}>Username</label>
-        <input style={S.input} value={username} placeholder="Enter username"
-          onChange={(e) => setUsername(e.target.value)} />
-        <label style={S.label}>Password</label>
-        <input style={S.input} type="password" value={password} placeholder="Enter password"
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleLogin()} />
-        <button style={S.btn} onClick={handleLogin} disabled={loading}>
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
+    <main style={S.page}>
+      <div style={S.wrap}>
+        <div style={S.mark} aria-hidden="true">H</div>
+        <h1 className="hq-large-title">Sign in to HealthQueue</h1>
+        <p className="hq-footnote" style={{ margin: '8px 0 0' }}>Kalingalinga Clinic staff</p>
+
+        <form onSubmit={handleLogin} noValidate>
+          <div className="hq-group" style={S.group}>
+            <div className="hq-row" style={{ padding: 0 }}>
+              <input style={S.groupInput} value={username} placeholder="Username" aria-label="Username"
+                autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus
+                onChange={(e) => setUsername(e.target.value)} />
+            </div>
+            <div className="hq-row" style={{ padding: 0 }}>
+              <input style={S.groupInput} type="password" value={password} placeholder="Password"
+                aria-label="Password" autoComplete="current-password"
+                onChange={(e) => setPassword(e.target.value)} />
+            </div>
+          </div>
+
+          {error && <div className="hq-notice is-error" role="alert" style={{ marginBottom: 16, textAlign: 'left' }}>{error}</div>}
+
+          <button type="submit" className="hq-btn hq-btn-primary hq-btn-large" disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+
+        <div className="hq-footnote" style={S.footer}>
+          Patients don’t need an account.{' '}
+          <Link to="/display" style={{ color: 'var(--hq-blue)', textDecoration: 'none', fontWeight: 500 }}>
+            Open the waiting-room display
+          </Link>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

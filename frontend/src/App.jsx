@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login, { HOME_BY_ROLE } from './pages/Login';
 import Reception from './pages/Reception';
 import Clinic from './pages/Clinic';
@@ -20,22 +20,6 @@ function Protected({ roles, children }) {
   return children;
 }
 
-// Temporary screen: we replace each one in turn
-function Placeholder({ title }) {
-  const staff = getStaff();
-  const signOut = () => {
-    sessionStorage.clear();
-    window.location.href = '/login';
-  };
-  return (
-    <div style={{ fontFamily: '-apple-system, "Segoe UI", sans-serif', padding: 40 }}>
-      <h1>{title}</h1>
-      <p>Signed in as <strong>{staff?.full_name}</strong> ({staff?.role})</p>
-      <button onClick={signOut}>Sign out</button>
-    </div>
-  );
-}
-
 // Already signed in? Skip the login page and go to your own screen
 function LoginRoute() {
   const staff = getStaff();
@@ -52,37 +36,7 @@ function HomeRedirect() {
 }
 
 function TestBanner() {
-  return (
-    <div style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 1000,
-      backgroundColor: '#FF9500', color: '#fff', textAlign: 'center',
-      fontSize: 12, fontWeight: 700, padding: '5px 8px', letterSpacing: 0.5,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    }}>
-      TEST ENVIRONMENT: DO NOT USE REAL DATA
-    </div>
-  );
-}
-
-// Managers and admins get a small link to Settings, and back to analytics from there
-function SettingsLink() {
-  const { pathname } = useLocation();
-  const staff = getStaff();
-  if (!staff || !['manager', 'admin'].includes(staff.role) || pathname === '/display' || pathname === '/login') {
-    return null;
-  }
-  const onSettings = pathname === '/settings';
-  return (
-    <Link to={onSettings ? '/manager' : '/settings'} style={{
-      position: 'fixed', bottom: 36, left: 16, zIndex: 999,
-      backgroundColor: '#1C1C1E', color: '#fff', textDecoration: 'none',
-      fontSize: 13, fontWeight: 600, padding: '8px 14px', borderRadius: 20,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-    }}>
-      {onSettings ? '← Analytics' : 'Settings'}
-    </Link>
-  );
+  return <div className="hq-test-banner">TEST ENVIRONMENT: DO NOT USE REAL DATA</div>;
 }
 
 export default function App() {
@@ -90,7 +44,6 @@ export default function App() {
     <BrowserRouter>
       <TestBanner />
       <NetworkStatus />
-      <SettingsLink />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/reception" element={

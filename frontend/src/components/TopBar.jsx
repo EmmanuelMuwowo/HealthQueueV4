@@ -1,5 +1,21 @@
+import { NavLink } from 'react-router-dom';
+
+const ROLE_NAMES = {
+  receptionist: 'Receptionist',
+  clinician: 'Clinician',
+  manager: 'Clinic manager',
+  admin: 'Administrator',
+};
+
+// The screens each role can open, shown as links in the bar
+const LINKS_BY_ROLE = {
+  manager: [['/manager', 'Analytics'], ['/settings', 'Settings']],
+  admin: [['/reception', 'Reception'], ['/clinic', 'Clinic'], ['/manager', 'Analytics'], ['/settings', 'Settings'], ['/display', 'Display']],
+};
+
 export default function TopBar({ subtitle }) {
   const staff = JSON.parse(sessionStorage.getItem('staff') || '{}');
+  const links = LINKS_BY_ROLE[staff.role] || [];
 
   const signOut = () => {
     sessionStorage.clear();
@@ -7,30 +23,34 @@ export default function TopBar({ subtitle }) {
   };
 
   return (
-    <div style={{
-      backgroundColor: '#fff', borderBottom: '1px solid #E5E5EA', padding: '14px 32px',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 34, height: 34, backgroundColor: '#007AFF', borderRadius: 9, color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
-        }}>H</div>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#1C1C1E' }}>HealthQueue</div>
-          <div style={{ fontSize: 12, color: '#8E8E93' }}>{subtitle}</div>
+    <header className="hq-topbar">
+      <div className="hq-topbar-inner">
+        <div className="hq-brand">
+          <div className="hq-brand-mark" aria-hidden="true">H</div>
+          <div>
+            <div className="hq-brand-name">HealthQueue</div>
+            {subtitle && <div className="hq-brand-sub">{subtitle}</div>}
+          </div>
+        </div>
+
+        {links.length > 0 && (
+          <nav className="hq-nav" aria-label="Screens">
+            {links.map(([to, label]) => (
+              <NavLink key={to} to={to} end className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        )}
+
+        <div className="hq-user">
+          <div>
+            <div className="hq-user-name">{staff.full_name}</div>
+            <div className="hq-user-role">{ROLE_NAMES[staff.role] || staff.role}</div>
+          </div>
+          <button type="button" className="hq-btn hq-btn-secondary" onClick={signOut}>Sign out</button>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span style={{ fontSize: 14, color: '#8E8E93' }}>
-          {staff.full_name} · {staff.role}
-        </span>
-        <button onClick={signOut} style={{
-          padding: '7px 16px', backgroundColor: '#FFF2F2', color: '#FF3B30', border: 'none',
-          borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer',
-        }}>Sign out</button>
-      </div>
-    </div>
+    </header>
   );
 }

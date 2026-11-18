@@ -87,6 +87,10 @@ const registrationMessage = ({ token_number, service_point, patients_ahead, ...e
  
 const calledMessage = ({ token_number, service_point }) =>
   `HealthQueue: ${token_number}, it is your turn. Please go to ${service_point} now.`;
+
+// Sent once, when the patient is near the front of the queue
+const almostNextMessage = ({ token_number, service_point }) =>
+  `HealthQueue: ${token_number}, you are almost next at ${service_point}. Please return to the waiting area now.`;
  
 // Sends (or logs) a message and records the outcome in sms_log.
 // Never throws, so an SMS problem can never stop a patient from getting a token.
@@ -134,4 +138,6 @@ const deliver = async ({ tokenId, appointmentId, kind, phone, message }) => {
   return { status, error, to, attempts };
 };
  
-module.exports = { sendSms, deliver, toE164, waitText, registrationMessage, calledMessage };
+module.exports = {
+  sendSms, deliver, toE164, waitText, registrationMessage, calledMessage, almostNextMessage,
+};

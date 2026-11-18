@@ -6,92 +6,16 @@ import { newRef, addPending, getPending, removePending, syncPending } from '../s
 import { normalizePhone } from '../utils/phone';
 
 const S = {
-  page: {
-    minHeight: '100vh', backgroundColor: '#F2F2F7',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  searchWrap: { background: 'var(--hq-bg)', borderRadius: 12, padding: 12, marginBottom: 20 },
+  result: { cursor: 'pointer' },
+  hint: { fontSize: 12, color: 'var(--hq-red)', marginTop: -2 },
+  twoUp: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  actions: { display: 'flex', gap: 10, marginTop: 6 },
+  heroMeta: { fontSize: 14, opacity: 0.85 },
+  savedCard: {
+    background: '#636366', color: '#fff', borderRadius: 'var(--hq-r-hero)', padding: '24px 28px',
   },
-  body: {
-    maxWidth: 1000, margin: '0 auto', padding: '20px 20px 28px',
-    display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start',
-  },
-  card: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 24,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.06)', flex: 1, minWidth: 320,
-  },
-  h2: { fontSize: 18, fontWeight: 600, color: '#1C1C1E', margin: '0 0 16px' },
-  label: { fontSize: 13, fontWeight: 500, color: '#3C3C43', marginBottom: 6, display: 'block' },
-  input: {
-    width: '100%', padding: '11px 14px', borderRadius: 10, border: '1px solid #E5E5EA',
-    fontSize: 15, backgroundColor: '#FAFAFA', outline: 'none', marginBottom: 14,
-  },
-  hint: { fontSize: 12, color: '#FF3B30', margin: '-8px 0 14px' },
-  row: { display: 'flex', gap: 12, marginTop: 4 },
-  primary: {
-    flex: 1, padding: 13, backgroundColor: '#007AFF', color: '#fff', border: 'none',
-    borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: 'pointer',
-  },
-  urgent: {
-    padding: '13px 20px', backgroundColor: '#FF3B30', color: '#fff', border: 'none',
-    borderRadius: 10, fontSize: 15, fontWeight: 600, cursor: 'pointer',
-  },
-  error: {
-    color: '#FF3B30', fontSize: 13, backgroundColor: '#FFF2F2',
-    padding: '10px 12px', borderRadius: 8, marginBottom: 14,
-  },
-  searchBox: {
-    backgroundColor: '#F2F2F7', borderRadius: 12, padding: 14, marginBottom: 18,
-  },
-  result: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10,
-    backgroundColor: '#fff', marginTop: 6, cursor: 'pointer', fontSize: 14,
-    border: '1px solid #E5E5EA',
-  },
-  muted: { fontSize: 12, color: '#8E8E93' },
-  selected: {
-    backgroundColor: '#EAF3FF', borderRadius: 12, padding: '14px 16px', marginBottom: 14,
-  },
-  linkBtn: {
-    border: 'none', background: 'none', color: '#007AFF', fontSize: 13,
-    fontWeight: 600, cursor: 'pointer', padding: 0,
-  },
-  badge: (returning) => ({
-    display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-    backgroundColor: returning ? '#E8F8F2' : '#FFF3CD',
-    color: returning ? '#1A7A5E' : '#856404', marginBottom: 12,
-  }),
-  empty: { color: '#8E8E93', fontSize: 15, textAlign: 'center', padding: '60px 0' },
-  tokenBox: {
-    background: 'linear-gradient(135deg, #007AFF 0%, #0055D4 100%)', borderRadius: 16,
-    padding: 24, color: '#fff', marginBottom: 16,
-  },
-  savedBox: {
-    background: 'linear-gradient(135deg, #8E8E93 0%, #636366 100%)', borderRadius: 16,
-    padding: 24, color: '#fff', marginBottom: 16,
-  },
-  tokenLabel: { fontSize: 11, fontWeight: 700, letterSpacing: 1, opacity: 0.8, textTransform: 'uppercase' },
-  tokenNum: { fontSize: 48, fontWeight: 700, margin: '4px 0' },
-  statRow: { display: 'flex', gap: 12 },
-  stat: { flex: 1, backgroundColor: '#F2F2F7', borderRadius: 12, padding: '14px 16px' },
-  statNum: { fontSize: 26, fontWeight: 700, color: '#007AFF' },
-  statLabel: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
-  note: { fontSize: 12, color: '#8E8E93', marginTop: 14 },
-  syncHead: {
-    fontSize: 13, fontWeight: 600, color: '#8E8E93', textTransform: 'uppercase',
-    letterSpacing: 0.5, margin: '24px 0 8px',
-  },
-  syncRow: {
-    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-    borderRadius: 10, backgroundColor: '#F2F2F7', marginBottom: 6, fontSize: 14,
-  },
-  pill: (status) => ({
-    padding: '2px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-    backgroundColor: status === 'failed' ? '#FFE5E5' : status === 'synced' ? '#E8F8F2' : '#FFF3CD',
-    color: status === 'failed' ? '#CC0000' : status === 'synced' ? '#1A7A5E' : '#856404',
-  }),
-  dismiss: {
-    padding: '4px 10px', borderRadius: 8, border: 'none', backgroundColor: '#fff',
-    color: '#FF3B30', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-  },
+  statValue: { fontSize: 22, fontWeight: 700, color: 'var(--hq-label)' },
 };
 
 const clock = (iso) =>
@@ -292,190 +216,241 @@ export default function Reception() {
   const history = result?.patient_history;
 
   return (
-    <div style={S.page}>
-      <TopBar subtitle="Reception · Register patient" />
+    <div>
+      <TopBar subtitle="Reception" />
       <ReceptionNav />
-      <div style={S.body}>
-        <div style={S.card}>
-          <h2 style={S.h2}>Register walk-in patient</h2>
-          {error && <div style={S.error}>{error}</div>}
+      <main className="hq-page hq-columns" style={{ paddingTop: 20 }}>
+        {/* ---------------- Registration ---------------- */}
+        <section className="hq-panel" aria-labelledby="reg-title">
+          <h2 id="reg-title" className="hq-title" style={{ marginBottom: 16 }}>Register walk-in patient</h2>
+          {error && <div className="hq-notice is-error" role="alert" style={{ marginBottom: 14 }}>{error}</div>}
 
           {!selected && (
-            <div style={S.searchBox}>
-              <label style={S.label}>Find returning patient (phone or name)</label>
-              <input style={{ ...S.input, marginBottom: 0, backgroundColor: '#fff' }}
-                value={query} placeholder="e.g. 0977 or Banda"
-                onChange={(e) => setQuery(e.target.value)} />
-              {matches.map((p) => (
-                <div key={p.id} style={S.result} onClick={() => choosePatient(p)}>
-                  <div style={{ flex: 1 }}>
-                    <strong>{p.full_name}</strong>
-                    <div style={S.muted}>
-                      {p.phone_number || 'No phone'} · {p.visit_count} visit{p.visit_count === 1 ? '' : 's'}
-                      {p.last_visit ? ` · last ${day(p.last_visit)}` : ''}
+            <div style={S.searchWrap}>
+              <div className="hq-field" style={{ marginBottom: matches.length || searchMsg ? 10 : 0 }}>
+                <label htmlFor="find">Find a returning patient by phone or name</label>
+                <input id="find" className="hq-input" type="search" value={query}
+                  placeholder="For example 0977 or Banda" autoComplete="off"
+                  onChange={(e) => setQuery(e.target.value)} />
+              </div>
+              {matches.length > 0 && (
+                <div className="hq-group" role="list">
+                  {matches.map((p) => (
+                    <div key={p.id} role="listitem" className="hq-row" style={S.result}
+                      tabIndex={0} onClick={() => choosePatient(p)}
+                      onKeyDown={(e) => e.key === 'Enter' && choosePatient(p)}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{p.full_name}</div>
+                        <div className="hq-caption hq-num">
+                          {p.phone_number || 'No phone'}, {p.visit_count} visit{p.visit_count === 1 ? '' : 's'}
+                          {p.last_visit ? `, last on ${day(p.last_visit)}` : ''}
+                        </div>
+                      </div>
+                      <span style={{ color: 'var(--hq-blue)', fontWeight: 600, fontSize: 14 }}>Select</span>
                     </div>
-                  </div>
-                  <span style={{ color: '#007AFF', fontWeight: 600 }}>Select</span>
+                  ))}
                 </div>
-              ))}
-              {searchMsg && <div style={{ ...S.muted, marginTop: 8 }}>{searchMsg}</div>}
+              )}
+              {searchMsg && <div className="hq-caption" style={{ marginTop: 8 }}>{searchMsg}</div>}
             </div>
           )}
 
           {selected ? (
-            <div style={S.selected}>
-              <div style={S.badge(true)}>Returning patient</div>
-              <div style={{ fontSize: 17, fontWeight: 600 }}>{selected.full_name}</div>
-              <div style={S.muted}>
-                {selected.phone_number || 'No phone'} · {selected.visit_count} previous visit
-                {selected.visit_count === 1 ? '' : 's'}
-                {selected.last_visit ? ` · last ${day(selected.last_visit)}` : ''}
+            <div className="hq-group" style={{ marginBottom: 20 }}>
+              <div className="hq-row">
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 600 }}>{selected.full_name}</div>
+                  <div className="hq-caption hq-num">
+                    {selected.phone_number || 'No phone'}, {selected.visit_count} previous visit
+                    {selected.visit_count === 1 ? '' : 's'}
+                    {selected.last_visit ? `, last on ${day(selected.last_visit)}` : ''}
+                  </div>
+                </div>
+                <span className="hq-pill is-green">Returning patient</span>
               </div>
-              <button style={{ ...S.linkBtn, marginTop: 8 }} onClick={resetPatient}>
-                Not this patient? Register someone new
-              </button>
+              <div className="hq-row">
+                <button type="button" className="hq-btn hq-btn-plain" style={{ padding: 0, minHeight: 0 }} onClick={resetPatient}>
+                  Not this patient? Register someone new
+                </button>
+              </div>
             </div>
           ) : (
             <>
-              <label style={S.label}>Full name *</label>
-              <input style={S.input} value={form.full_name} onChange={update('full_name')} />
-
-              <label style={S.label}>Phone number</label>
-              <input style={S.input} value={form.phone_number} placeholder="0977123456"
-                onChange={update('phone_number')} />
-              {phoneInvalid && (
-                <div style={S.hint}>Use a Zambian mobile number: 10 digits starting 095, 096, 097, 075, 076 or 077.</div>
-              )}
-
-              <label style={S.label}>Gender</label>
-              <select style={S.input} value={form.gender} onChange={update('gender')}>
-                <option value="">Select</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
+              <div className="hq-field">
+                <label htmlFor="full_name">Full name</label>
+                <input id="full_name" className="hq-input" value={form.full_name} autoComplete="off"
+                  onChange={update('full_name')} required />
+              </div>
+              <div style={S.twoUp}>
+                <div className="hq-field">
+                  <label htmlFor="phone">Phone number (optional)</label>
+                  <input id="phone" className="hq-input hq-num" value={form.phone_number} inputMode="tel"
+                    placeholder="0977123456" autoComplete="off" onChange={update('phone_number')}
+                    aria-invalid={phoneInvalid || undefined}
+                    style={phoneInvalid ? { borderColor: 'var(--hq-red)' } : undefined} />
+                  {phoneInvalid && (
+                    <div style={S.hint}>Use 10 digits starting 095, 096, 097, 075, 076 or 077.</div>
+                  )}
+                </div>
+                <div className="hq-field">
+                  <label htmlFor="gender">Gender</label>
+                  <select id="gender" className="hq-select" value={form.gender} onChange={update('gender')}>
+                    <option value="">Select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
             </>
           )}
 
-          <label style={S.label}>Service point</label>
-          <select style={S.input} value={form.service_point_id} onChange={update('service_point_id')}>
-            {servicePoints.map((sp) => (
-              <option key={sp.id} value={sp.id}>{sp.name}</option>
-            ))}
-          </select>
+          <div style={S.twoUp}>
+            <div className="hq-field">
+              <label htmlFor="sp">Service point</label>
+              <select id="sp" className="hq-select" value={form.service_point_id} onChange={update('service_point_id')}>
+                {servicePoints.map((sp) => (
+                  <option key={sp.id} value={sp.id}>{sp.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="hq-field">
+              <label htmlFor="cat">Visit type</label>
+              <select id="cat" className="hq-select" value={form.category_id} onChange={update('category_id')}>
+                {spCategories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-          <label style={S.label}>Visit type</label>
-          <select style={S.input} value={form.category_id} onChange={update('category_id')}>
-            {spCategories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <div className="hq-field">
+            <label htmlFor="reason">Reason for visit (optional)</label>
+            <input id="reason" className="hq-input" value={form.reason} onChange={update('reason')} />
+          </div>
 
-          <label style={S.label}>Reason for visit (optional)</label>
-          <input style={S.input} value={form.reason} onChange={update('reason')} />
-
-          <div style={S.row}>
-            <button style={S.primary} disabled={loading} onClick={() => submit('normal')}>
-              {loading ? 'Registering...' : 'Create visit & token'}
+          <div style={S.actions}>
+            <button type="button" className="hq-btn hq-btn-primary" style={{ flex: 1, minHeight: 48 }}
+              disabled={loading} onClick={() => submit('normal')}>
+              {loading ? 'Registering…' : 'Issue token'}
             </button>
-            <button style={S.urgent} disabled={loading} onClick={() => submit('urgent')}>
+            <button type="button" className="hq-btn hq-btn-destructive" style={{ minHeight: 48 }}
+              disabled={loading} onClick={() => submit('urgent')}>
               Urgent
             </button>
           </div>
-        </div>
+        </section>
 
-        <div style={S.card}>
-          <h2 style={S.h2}>Token issued</h2>
+        {/* ---------------- Result ---------------- */}
+        <section className="hq-panel" aria-labelledby="tok-title" aria-live="polite">
+          <h2 id="tok-title" className="hq-title" style={{ marginBottom: 16 }}>Token</h2>
 
           {savedOffline ? (
-            <div style={S.savedBox}>
-              <div style={S.tokenLabel}>Saved on this device · pending sync</div>
-              <div style={{ fontSize: 34, fontWeight: 700, margin: '6px 0' }}>
-                Ref {shortRef(savedOffline.client_ref)}
-              </div>
-              <div style={{ fontSize: 16 }}>{savedOffline.full_name}</div>
-              <div style={{ fontSize: 13, opacity: 0.9, marginTop: 6 }}>
-                {savedOffline.service_point_name} · registered {clock(savedOffline.captured_at)}.
+            <div style={S.savedCard}>
+              <span className="hq-pill" style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }}>
+                Saved on this device, waiting to sync
+              </span>
+              <div className="hq-token" style={{ fontSize: 40, margin: '14px 0 6px' }}>Ref {shortRef(savedOffline.client_ref)}</div>
+              <div style={{ fontSize: 17, fontWeight: 600 }}>{savedOffline.full_name}</div>
+              <div style={{ ...S.heroMeta, marginTop: 6 }}>
+                {savedOffline.service_point_name}, registered at {clock(savedOffline.captured_at)}.
                 The token number is issued when the connection returns.
               </div>
             </div>
           ) : !result ? (
-            <div style={S.empty}>Register a patient to generate a token.</div>
+            <div className="hq-empty">Register a patient to issue a token.</div>
           ) : (
             <>
               {history && (
-                <div style={S.badge(history.status === 'returning')}>
-                  {history.status === 'returning'
-                    ? `Returning patient · ${history.previous_visits} previous visit${history.previous_visits === 1 ? '' : 's'}`
-                    : 'New patient · first visit'}
+                <div style={{ marginBottom: 12 }}>
+                  <span className={`hq-pill ${history.status === 'returning' ? 'is-green' : 'is-blue'}`}>
+                    {history.status === 'returning'
+                      ? `Returning patient, ${history.previous_visits} previous visit${history.previous_visits === 1 ? '' : 's'}`
+                      : 'New patient, first visit'}
+                  </span>
+                  {result.token.priority === 'urgent' && (
+                    <span className="hq-pill is-red" style={{ marginLeft: 6 }}>Urgent</span>
+                  )}
                 </div>
               )}
-              <div style={S.tokenBox}>
-                <div style={S.tokenLabel}>
-                  {result.service_point}{result.category ? ` · ${result.category.name}` : ''} · {result.token.status}
+              <div className="hq-token-card">
+                <div style={S.heroMeta}>
+                  {result.service_point}{result.category ? `, ${result.category.name}` : ''}
                 </div>
-                <div style={S.tokenNum}>{result.token.token_number}</div>
-                <div style={{ fontSize: 16 }}>{result.patient.full_name}</div>
-                <div style={{ fontSize: 13, opacity: 0.8 }}>
-                  {result.patient.phone_number || 'No phone number'}
-                  {result.token.priority === 'urgent' ? ' · URGENT' : ''}
+                <div className="hq-token" style={{ margin: '8px 0 10px' }}>{result.token.token_number}</div>
+                <div style={{ fontSize: 17, fontWeight: 600 }}>{result.patient.full_name}</div>
+                <div className="hq-num" style={S.heroMeta}>{result.patient.phone_number || 'No phone number'}</div>
+              </div>
+
+              <div className="hq-group" style={{ marginTop: 16 }}>
+                <div className="hq-row">
+                  <span className="hq-row-label">Patients ahead</span>
+                  <span className="hq-num" style={S.statValue}>{result.ewt.patients_ahead}</span>
+                </div>
+                <div className="hq-row">
+                  <span className="hq-row-label">Estimated wait</span>
+                  <span className="hq-num" style={S.statValue}>{waitRange(result.ewt)}</span>
+                </div>
+                <div className="hq-row">
+                  <span className="hq-row-label">Status</span>
+                  <span className="hq-row-value" style={{ textTransform: 'capitalize' }}>{result.token.status}</span>
                 </div>
               </div>
-              <div style={S.statRow}>
-                <div style={S.stat}>
-                  <div style={S.statNum}>{result.ewt.patients_ahead}</div>
-                  <div style={S.statLabel}>patients ahead</div>
-                </div>
-                <div style={S.stat}>
-                  <div style={S.statNum}>{waitRange(result.ewt)}</div>
-                  <div style={S.statLabel}>estimated wait</div>
-                </div>
-              </div>
-              <div style={S.note}>
+              <p className="hq-caption" style={{ margin: '12px 4px 0' }}>
                 {hasRange(result.ewt)
                   ? `Estimate ${result.ewt.ewt_minutes} min, shown as a range (80% to 130%, rounded to 5 min). `
                   : `Estimate ${result.ewt.ewt_minutes} min. `}
                 Based on the visit types of the {result.ewt.patients_ahead} patient
                 {result.ewt.patients_ahead === 1 ? '' : 's'} ahead and recent consultation times.
-              </div>
+              </p>
             </>
           )}
 
           {pending.length > 0 && (
             <>
-              <div style={S.syncHead}>Waiting to sync ({pending.length})</div>
-              {pending.map((p) => (
-                <div key={p.client_ref} style={S.syncRow}>
-                  <strong>{shortRef(p.client_ref)}</strong>
-                  <span style={{ flex: 1 }}>{p.full_name} · {p.service_point_name} · {clock(p.captured_at)}</span>
-                  <span style={S.pill(p.status)}>{p.status === 'failed' ? 'failed' : 'pending'}</span>
-                  {p.status === 'failed' && (
-                    <button style={S.dismiss} onClick={() => removePending(p.client_ref)}>Dismiss</button>
-                  )}
-                </div>
-              ))}
-              {pending.filter((p) => p.status === 'failed').map((p) => (
-                <div key={`${p.client_ref}-err`} style={{ ...S.error, marginTop: 4 }}>
-                  {shortRef(p.client_ref)}: {p.error}
-                </div>
-              ))}
+              <div className="hq-group-title">Waiting to sync ({pending.length})</div>
+              <div className="hq-group">
+                {pending.map((p) => (
+                  <div key={p.client_ref} className="hq-row">
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }} className="hq-num">{shortRef(p.client_ref)} <span style={{ fontWeight: 400 }}>{p.full_name}</span></div>
+                      <div className="hq-caption">{p.service_point_name}, {clock(p.captured_at)}</div>
+                      {p.status === 'failed' && <div className="hq-caption" style={{ color: 'var(--hq-red)' }}>{p.error}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span className={`hq-pill ${p.status === 'failed' ? 'is-red' : 'is-orange'}`}>
+                        {p.status === 'failed' ? 'Failed' : 'Pending'}
+                      </span>
+                      {p.status === 'failed' && (
+                        <button type="button" className="hq-btn hq-btn-plain" style={{ minHeight: 0, color: 'var(--hq-red)' }}
+                          onClick={() => removePending(p.client_ref)}>Dismiss</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
 
           {synced.length > 0 && (
             <>
-              <div style={S.syncHead}>Recently synced</div>
-              {synced.map((r) => (
-                <div key={r.visit.id} style={S.syncRow}>
-                  <strong>{r.token.token_number}</strong>
-                  <span style={{ flex: 1 }}>{r.patient.full_name} · {r.service_point}</span>
-                  <span style={S.pill('synced')}>synced</span>
-                </div>
-              ))}
+              <div className="hq-group-title">Recently synced</div>
+              <div className="hq-group">
+                {synced.map((r) => (
+                  <div key={r.visit.id} className="hq-row">
+                    <div>
+                      <span className="hq-num" style={{ fontWeight: 600 }}>{r.token.token_number}</span>{' '}
+                      {r.patient.full_name}
+                      <div className="hq-caption">{r.service_point}</div>
+                    </div>
+                    <span className="hq-pill is-green">Synced</span>
+                  </div>
+                ))}
+              </div>
             </>
           )}
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
