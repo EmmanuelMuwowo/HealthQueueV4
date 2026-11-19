@@ -400,13 +400,25 @@ export default function Clinic() {
                   </span>
                 </div>
               ))}
+              {queue.call_to_start && (
+                <div className="hq-row">
+                  <span className="hq-row-label">Walking in after being called</span>
+                  <span className="hq-row-value hq-num">
+                    {queue.call_to_start.minutes} min,{' '}
+                    {queue.call_to_start.source === 'ewma'
+                      ? `from ${queue.call_to_start.sample_size} recent calls`
+                      : 'default (fewer than 3 recent calls)'}
+                  </span>
+                </div>
+              )}
             </div>
           </>
         )}
 
         <p className="hq-caption" style={{ textAlign: 'center', marginTop: 18 }}>
-          Wait = time left in the current consultation plus the typical time of each patient ahead,
-          shown as a range. The queue refreshes every 3 seconds.
+          Wait = time left in the current consultation, plus the typical time of each patient ahead,
+          plus the time each patient takes to walk in after being called, shown as a range.
+          The queue refreshes every 3 seconds.
         </p>
       </main>
     </div>

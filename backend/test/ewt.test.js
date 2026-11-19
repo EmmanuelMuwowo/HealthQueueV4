@@ -2,7 +2,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  ewma, categoryAHT, remainingMinutes, band, estimateFromQueue, WINDOW, MIN_COMPLETED,
+  ewma, categoryAHT, callToStart, remainingMinutes, band, estimateFromQueue, WINDOW, MIN_COMPLETED,
+  DEFAULT_CTS_MINUTES,
 } = require('../src/services/queueService');
 
 const near = (a, b, tol = 0.05) => assert.ok(Math.abs(a - b) <= tol, `${a} is not close to ${b}`);
@@ -101,4 +102,34 @@ test('Band always contains the estimate', () => {
     const b = band(ewt);
     assert.ok(b.ewt_low <= ewt && ewt <= b.ewt_high, `band ${b.ewt_low}-${b.ewt_high} misses ${ewt}`);
   }
+});
+// ---- Call-to-start time (added after the evaluation run of 11 November 2026) ----
+
+test('Call-to-start: the default of 1 minute is used until 3 gaps are recorded, then the EWMA', () => {
+  assert.equal(DEFAULT_CTS_MINUTES, 1);
+  const few = callToStart([2, 2]);
+  assert.equal(few.minutes, 1);
+  assert.equal(few.source, 'default');
+  const enough = callToStart([2, 2, 2]);
+  near(enough.minutes, 2);
+  assert.equal(enough.source, 'ewma');
+});
+
+test('Call-to-start is added for each patient ahead and for the patient (3 x (8 + 1) + 1 = 28)', () => {
+  const e = estimateFromQueue({
+    tokens: [w(1, 'x'), w(2, 'x'), w(3, 'x'), w(4, 'x')],
+    ahtFor: () => 8, cts: 1,
+  });
+  assert.equal(e.get(4).ewt_minutes, 28);
+});
+
+test('A patient already in consultation adds no call-to-start time (2 left + 1 = 3)', () => {
+  const e = estimateFromQueue({
+    tokens: [
+      { id: 1, category_id: 'x', status: 'in_consultation', consultation_start: minutesAgo(6) },
+      w(2, 'x'),
+    ],
+    ahtFor: () => 8, cts: 1,
+  });
+  near(e.get(2).ewt_exact_minutes, 3, 0.2);
 });

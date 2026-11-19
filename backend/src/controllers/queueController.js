@@ -57,7 +57,7 @@ const getQueue = async (req, res) => {
       [spId]
     );
 
-    const { estimates, ahts, current } = await estimateQueue(pool, spId, null);
+    const { estimates, ahts, current, cts } = await estimateQueue(pool, spId, null);
     const r1 = (n) => Math.round(n * 10) / 10;
 
     const active = result.rows.filter((t) => t.status !== 'waiting');
@@ -84,6 +84,7 @@ const getQueue = async (req, res) => {
       category_aht: ahts.all.map((c) => ({
         name: c.name, aht_minutes: r1(c.aht), source: c.source, sample_size: c.sample_size,
       })),
+      call_to_start: { minutes: r1(cts.minutes), source: cts.source, sample_size: cts.sample_size },
       current_elapsed_minutes: current ? r1(current.elapsed) : null,
       current_remaining_minutes: current ? r1(current.remaining) : null,
     });

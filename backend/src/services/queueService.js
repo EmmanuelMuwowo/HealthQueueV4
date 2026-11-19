@@ -1,10 +1,16 @@
 // HealthQueue EWT engine.
 //
-// EWT = ( sum of expected times of everyone ahead / active clinicians ) x (1 + buffer)
+// EWT = ( work ahead / active clinicians + own call-to-start ) x (1 + buffer)
+//
+// Work ahead = for each patient ahead, their expected consultation time, plus the
+// call-to-start time (walking in after being called) for each one not yet started.
+// Call-to-start time = EWMA of the last 10 recorded gaps at the service point
+// (past 30 days), or 1 minute until 3 have been recorded. Added after the
+// evaluation run of 11 November 2026, which found it was missing from the estimate.
 //
 // Expected time per visit category = EWMA of its last 10 completed consultations
 // (past 30 days), or the category's default until 3 have been completed.
-
+ 
 const ALPHA = 0.3;          // weight of the newest consultation in the EWMA
 const MIN_COMPLETED = 3;    // below this, the category default is used
 const WINDOW = 10;          // number of recent consultations considered
@@ -15,22 +21,32 @@ const OVERRUN_SHARE = 0.2;  // an overrunning consultation still counts 20% of i
 // and are not used for average handling time.
 const MIN_VALID_MINUTES = 1;
 const MAX_VALID_MINUTES = 60;
-
+// Call-to-start: gaps outside 0.1 to 15 minutes are treated as recording errors
+const DEFAULT_CTS_MINUTES = 1;
+const MIN_VALID_CTS = 0.1;
+const MAX_VALID_CTS = 15;
+ 
 const round1 = (n) => Math.round(n * 10) / 10;
-
+ 
 // ---- Pure functions (unit tested, no database) ----
-
+ 
 // values ordered oldest to newest
 const ewma = (values, alpha = ALPHA) =>
   values.reduce((acc, x, i) => (i === 0 ? x : alpha * x + (1 - alpha) * acc), 0);
-
+ 
 const categoryAHT = (defaultMinutes, recent) =>
   (recent.length >= MIN_COMPLETED
     ? { aht: ewma(recent), source: 'ewma', sample_size: recent.length }
     : { aht: defaultMinutes, source: 'default', sample_size: recent.length });
-
+ 
+// Same rule as consultations: default until MIN_COMPLETED gaps are recorded, then the EWMA
+const callToStart = (recent, defaultMinutes = DEFAULT_CTS_MINUTES) =>
+  (recent.length >= MIN_COMPLETED
+    ? { minutes: ewma(recent), source: 'ewma', sample_size: recent.length }
+    : { minutes: defaultMinutes, source: 'default', sample_size: recent.length });
+ 
 const remainingMinutes = (aht, elapsed) => Math.max(aht - elapsed, OVERRUN_SHARE * aht);
-
+ 
 // 80% to 130% of the estimate, rounded outwards to 5 minutes
 const band = (ewt) => {
   if (ewt < 1) return { ewt_low: 0, ewt_high: 5 };
@@ -39,16 +55,17 @@ const band = (ewt) => {
   if (high <= low) high = low + 5;
   return { ewt_low: low, ewt_high: high };
 };
-
+ 
 // tokens must already be in queue order: active first, then urgent, then first come
-const estimateFromQueue = ({ tokens, ahtFor, clinicians = 1, buffer = 0, now = Date.now() }) => {
+// cts = call-to-start minutes (0 keeps the original formula)
+const estimateFromQueue = ({ tokens, ahtFor, clinicians = 1, buffer = 0, cts = 0, now = Date.now() }) => {
   const out = new Map();
   let workAhead = 0;
   let ahead = 0;
   for (const t of tokens) {
     const aht = ahtFor(t.category_id);
     if (t.status === 'waiting') {
-      const ewt = (workAhead / clinicians) * (1 + buffer);
+      const ewt = (workAhead / clinicians + cts) * (1 + buffer);
       out.set(t.id, {
         patients_ahead: ahead,
         ewt_exact_minutes: round1(ewt),
@@ -56,20 +73,20 @@ const estimateFromQueue = ({ tokens, ahtFor, clinicians = 1, buffer = 0, now = D
         work_ahead_minutes: round1(workAhead),
         ...band(ewt),
       });
-      workAhead += aht;
+      workAhead += aht + cts;
     } else if (t.status === 'in_consultation' && t.consultation_start) {
       const elapsed = Math.max(0, (now - new Date(t.consultation_start).getTime()) / 60000);
       workAhead += remainingMinutes(aht, elapsed);
     } else {
-      workAhead += aht; // called but not started yet
+      workAhead += aht + cts; // called but not started yet
     }
     ahead += 1;
   }
   return out;
 };
-
+ 
 // ---- Database layer ----
-
+ 
 const loadCategoryAHTs = async (db, servicePointId) => {
   const r = await db.query(
     `SELECT vc.id, vc.name, vc.default_minutes::float AS default_minutes, vc.is_default,
@@ -95,7 +112,7 @@ const loadCategoryAHTs = async (db, servicePointId) => {
      WHERE vc.service_point_id = $1 AND vc.is_active = TRUE`,
     [servicePointId, HISTORY_DAYS, WINDOW, MIN_VALID_MINUTES, MAX_VALID_MINUTES]
   );
-
+ 
   const byId = new Map();
   let fallback = null;
   for (const row of r.rows) {
@@ -107,7 +124,28 @@ const loadCategoryAHTs = async (db, servicePointId) => {
   if (!fallback) fallback = { category_id: null, name: 'Default', aht: 8, source: 'default', sample_size: 0 };
   return { get: (id) => byId.get(id) || fallback, all: [...byId.values()], fallback };
 };
-
+ 
+const loadCallToStart = async (db, servicePointId) => {
+  const r = await db.query(
+    `SELECT COALESCE(array_agg(s.m ORDER BY s.e), '{}') AS recent
+     FROM (
+       SELECT EXTRACT(EPOCH FROM (qt.consultation_start - qt.called_time)) / 60 AS m,
+              qt.consultation_start AS e
+       FROM queue_tokens qt
+       WHERE qt.service_point_id = $1
+         AND qt.called_time IS NOT NULL
+         AND qt.consultation_start IS NOT NULL
+         AND qt.consultation_start > NOW() - make_interval(days => $2)
+         AND qt.consultation_start - qt.called_time
+             BETWEEN make_interval(secs => $4) AND make_interval(secs => $5)
+       ORDER BY qt.consultation_start DESC
+       LIMIT $3
+     ) s`,
+    [servicePointId, HISTORY_DAYS, WINDOW, MIN_VALID_CTS * 60, MAX_VALID_CTS * 60]
+  );
+  return callToStart((r.rows[0]?.recent || []).map(Number));
+};
+ 
 // Estimates for every waiting token at a service point (queueDate null = today)
 const estimateQueue = async (db, servicePointId, queueDate = null, now = Date.now()) => {
   const sp = await db.query(
@@ -117,7 +155,8 @@ const estimateQueue = async (db, servicePointId, queueDate = null, now = Date.no
   const clinicians = sp.rows[0]?.active_clinicians || 1;
   const buffer = sp.rows[0]?.buffer_ratio || 0;
   const ahts = await loadCategoryAHTs(db, servicePointId);
-
+  const cts = await loadCallToStart(db, servicePointId);
+ 
   const t = await db.query(
     `SELECT qt.id, qt.status, qt.consultation_start, v.category_id
      FROM queue_tokens qt
@@ -131,11 +170,11 @@ const estimateQueue = async (db, servicePointId, queueDate = null, now = Date.no
        qt.sequence_no`,
     [servicePointId, queueDate]
   );
-
+ 
   const estimates = estimateFromQueue({
-    tokens: t.rows, ahtFor: (id) => ahts.get(id).aht, clinicians, buffer, now,
+    tokens: t.rows, ahtFor: (id) => ahts.get(id).aht, clinicians, buffer, cts: cts.minutes, now,
   });
-
+ 
   const inConsult = t.rows.find((x) => x.status === 'in_consultation' && x.consultation_start);
   let current = null;
   if (inConsult) {
@@ -143,10 +182,10 @@ const estimateQueue = async (db, servicePointId, queueDate = null, now = Date.no
     const elapsed = Math.max(0, (now - new Date(inConsult.consultation_start).getTime()) / 60000);
     current = { elapsed, remaining: remainingMinutes(aht, elapsed), aht };
   }
-
-  return { estimates, ahts, clinicians, buffer, current };
+ 
+  return { estimates, ahts, clinicians, buffer, cts, current };
 };
-
+ 
 // The estimate for one token (used at registration and check-in)
 const computeEWT = async (db, token) => {
   const { estimates, ahts } = await estimateQueue(db, token.service_point_id, token.queue_date);
@@ -160,12 +199,13 @@ const computeEWT = async (db, token) => {
     avg_service_minutes: round1(own.aht),
     avg_source: own.source === 'ewma' ? 'rolling_average' : 'default',
     sample_size: own.sample_size,
-    method: 'category_ewma',
+    method: 'category_ewma_cts',
   };
 };
-
+ 
 module.exports = {
-  ALPHA, MIN_COMPLETED, WINDOW, OVERRUN_SHARE,
-  ewma, categoryAHT, remainingMinutes, band, estimateFromQueue,
-  loadCategoryAHTs, estimateQueue, computeEWT,
+  ALPHA, MIN_COMPLETED, WINDOW, OVERRUN_SHARE, DEFAULT_CTS_MINUTES,
+  ewma, categoryAHT, callToStart, remainingMinutes, band, estimateFromQueue,
+  loadCategoryAHTs, loadCallToStart, estimateQueue, computeEWT,
 };
+
