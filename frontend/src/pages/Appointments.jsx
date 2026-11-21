@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
 import TopBar from '../components/TopBar';
 import ReceptionNav from '../components/ReceptionNav';
+import TokenSlip, { printSlip } from '../components/TokenSlip';
 
 const S = {
   twoUp: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
@@ -269,6 +270,12 @@ export default function Appointments() {
                   ? `${checkedIn.ewt.ewt_low}–${checkedIn.ewt.ewt_high} min`
                   : `about ${checkedIn.ewt.ewt_minutes} min`}
               </div>
+              <button type="button" className="hq-btn" onClick={printSlip}
+                style={{ marginTop: 14, background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
+                Print token slip
+              </button>
+              <TokenSlip token={checkedIn.token.token_number} servicePoint={checkedIn.service_point}
+                visitType={checkedIn.category?.name} ewt={checkedIn.ewt} issuedAt={checkedIn.token.arrival_time} />
             </div>
           )}
         </section>

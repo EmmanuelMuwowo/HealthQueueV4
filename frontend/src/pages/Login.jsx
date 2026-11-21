@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 
 export const HOME_BY_ROLE = {
@@ -31,6 +31,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const timedOut = params.get('reason') === 'idle';
 
   const handleLogin = async (e) => {
     e?.preventDefault();
@@ -47,9 +49,11 @@ export default function Login() {
       navigate(HOME_BY_ROLE[res.data.staff.role] || '/login');
     } catch (err) {
       setError(
-        err.response?.status === 401
-          ? 'Incorrect username or password.'
-          : 'Cannot reach the server. Check that the backend is running.'
+        !err.response
+          ? 'Cannot reach the server. Check that the backend is running.'
+          : err.response.status === 401
+            ? 'Incorrect username or password.'
+            : err.response.data?.error || 'Could not sign in.'
       );
     } finally {
       setLoading(false);
@@ -77,6 +81,11 @@ export default function Login() {
             </div>
           </div>
 
+          {timedOut && !error && (
+            <div className="hq-notice is-info" role="status" style={{ marginBottom: 16, textAlign: 'left' }}>
+              You were signed out because the screen was not used for a while. Sign in again to continue.
+            </div>
+          )}
           {error && <div className="hq-notice is-error" role="alert" style={{ marginBottom: 16, textAlign: 'left' }}>{error}</div>}
 
           <button type="submit" className="hq-btn hq-btn-primary hq-btn-large" disabled={loading}>

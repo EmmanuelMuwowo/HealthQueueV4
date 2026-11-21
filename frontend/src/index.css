@@ -181,3 +181,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* ---------- Printing: only the token slip prints ---------- */
+.hq-slip { display: none; }
+@media print {
+  @page { size: 80mm auto; margin: 4mm; }
+  body { background: #fff !important; padding: 0 !important; }
+  body * { visibility: hidden; }
+  .hq-slip, .hq-slip * { visibility: visible; }
+  .hq-slip {
+    display: block; position: absolute; left: 0; top: 0; width: 72mm;
+    color: #000; font-family: var(--hq-font); text-align: center;
+  }
+  .hq-slip-clinic { font-size: 13pt; font-weight: 700; }
+  .hq-slip-label { font-size: 9pt; margin-top: 4mm; }
+  .hq-slip-token { font-size: 36pt; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
+  .hq-slip-sp { font-size: 12pt; font-weight: 600; margin-top: 1mm; }
+  .hq-slip-small { font-size: 8pt; margin-top: 1mm; }
+  .hq-slip-rule { border-top: 1px dashed #000; margin: 3mm 0; }
+  .hq-slip-row { display: flex; justify-content: space-between; font-size: 10pt; margin: 1mm 0; text-align: left; }
+  .hq-slip-note { font-size: 8.5pt; line-height: 1.35; text-align: left; margin-bottom: 2mm; }
+}

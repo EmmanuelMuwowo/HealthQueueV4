@@ -65,14 +65,16 @@ const getServicePoints = async (req, res) => {
   }
 };
 
-// GET /api/visits/categories : not sensitive, so no login needed (like service points)
+// GET /api/visits/categories : not sensitive, so no login needed (like service points).
+// Only visit types of active service points are listed.
 const getCategories = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, service_point_id, code, name, default_minutes::float AS default_minutes, is_default
-       FROM visit_categories
-       WHERE is_active = TRUE
-       ORDER BY service_point_id, sort_order`
+      `SELECT vc.id, vc.service_point_id, vc.code, vc.name, vc.default_minutes::float AS default_minutes, vc.is_default
+       FROM visit_categories vc
+       JOIN service_points sp ON sp.id = vc.service_point_id
+       WHERE vc.is_active = TRUE AND sp.is_active = TRUE
+       ORDER BY vc.service_point_id, vc.sort_order`
     );
     res.json(result.rows);
   } catch (err) {

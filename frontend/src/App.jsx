@@ -7,6 +7,7 @@ import Display from './pages/Display';
 import Appointments from './pages/Appointments';
 import Settings from './pages/Settings';
 import NetworkStatus from './components/NetworkStatus';
+import IdleSignOut from './components/IdleSignOut';
 
 const getStaff = () => JSON.parse(sessionStorage.getItem('staff') || 'null');
 
@@ -44,6 +45,7 @@ export default function App() {
     <BrowserRouter>
       <TestBanner />
       <NetworkStatus />
+      <IdleSignOut />
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/reception" element={

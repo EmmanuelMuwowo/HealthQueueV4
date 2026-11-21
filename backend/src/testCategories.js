@@ -32,11 +32,17 @@ const login = async (username) => {
     const clinician = await login('clinician1');
     const stamp = Date.now() % 100000;
 
-    // 1. The list: 8 categories, exactly one default per service point
+    // 1. The list: every active service point has visit types, with exactly one default each.
+    // (Counts are not fixed: managers can add service points and visit types in Settings.)
     const list = await call('GET', '/visits/categories');
     check('Category list loads without login', list.status === 200 && Array.isArray(list.data));
     const cats = list.data || [];
-    check('There are 8 categories', cats.length === 8, `got ${cats.length}`);
+    const active = (await call('GET', '/visits/service-points')).data || [];
+    const activeIds = active.map((s) => s.id);
+    check('Every active service point has visit types, and no inactive one appears',
+      activeIds.every((id) => cats.some((c) => c.service_point_id === id))
+        && cats.every((c) => activeIds.includes(c.service_point_id)),
+      `active ${JSON.stringify(activeIds)}, listed ${JSON.stringify([...new Set(cats.map((c) => c.service_point_id))])}`);
     const sps = [...new Set(cats.map((c) => c.service_point_id))];
     check('Exactly one default per service point',
       sps.every((sp) => cats.filter((c) => c.service_point_id === sp && c.is_default).length === 1));

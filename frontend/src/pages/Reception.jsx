@@ -4,6 +4,7 @@ import TopBar from '../components/TopBar';
 import ReceptionNav from '../components/ReceptionNav';
 import { newRef, addPending, getPending, removePending, syncPending } from '../services/offlineQueue';
 import { normalizePhone } from '../utils/phone';
+import TokenSlip, { printSlip } from '../components/TokenSlip';
 
 const S = {
   searchWrap: { background: 'var(--hq-bg)', borderRadius: 12, padding: 12, marginBottom: 20 },
@@ -396,12 +397,24 @@ export default function Reception() {
                   <span className="hq-row-value" style={{ textTransform: 'capitalize' }}>{result.token.status}</span>
                 </div>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
+                <button type="button" className={`hq-btn ${result.patient.phone_number ? 'hq-btn-secondary' : 'hq-btn-primary'}`}
+                  onClick={printSlip}>
+                  Print token slip
+                </button>
+                {!result.patient.phone_number && (
+                  <span className="hq-footnote">No phone number, so no SMS. Give the patient a printed slip.</span>
+                )}
+              </div>
+              <TokenSlip token={result.token.token_number} servicePoint={result.service_point}
+                visitType={result.category?.name} ewt={result.ewt} issuedAt={result.token.arrival_time} />
               <p className="hq-caption" style={{ margin: '12px 4px 0' }}>
                 {hasRange(result.ewt)
                   ? `Estimate ${result.ewt.ewt_minutes} min, shown as a range (80% to 130%, rounded to 5 min). `
                   : `Estimate ${result.ewt.ewt_minutes} min. `}
                 Based on the visit types of the {result.ewt.patients_ahead} patient
-                {result.ewt.patients_ahead === 1 ? '' : 's'} ahead and recent consultation times.
+                {result.ewt.patients_ahead === 1 ? '' : 's'} ahead, recent consultation times and the time
+                patients take to walk in when called.
               </p>
             </>
           )}

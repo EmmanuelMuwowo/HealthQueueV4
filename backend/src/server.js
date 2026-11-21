@@ -1,11 +1,27 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 require('dotenv').config();
 const pool = require('./db');
  
 const app = express();
  
-app.use(cors());
+// Standard security headers (SR10). The API is called from the web app on another port,
+// so resources may be shared across origins; CORS below decides which origins may read them.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// Only the clinic's own web app may call the API from a browser (SR10).
+// Requests with no Origin header (test scripts, the evaluation driver) are not browser
+// requests and are allowed; they still need a valid login for protected routes.
+const allowedOrigins = (process.env.CORS_ORIGINS ||
+  'http://localhost:5180,http://localhost:4180,http://127.0.0.1:5180,http://127.0.0.1:4180')
+  .split(',').map((o) => o.trim()).filter(Boolean);
+app.use(cors({
+  origin: (origin, done) => {
+    if (!origin || allowedOrigins.includes(origin)) return done(null, true);
+    return done(null, false);
+  },
+}));
 app.use(express.json());
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);

@@ -1,4 +1,6 @@
 const pool = require('../db');
+const bcrypt = require('bcryptjs');
+const { passwordProblem } = require('../utils/password');
  
 const httpError = (status, message) => Object.assign(new Error(message), { status });
  
@@ -53,7 +55,7 @@ const getConfig = async (req, res) => {
       `SELECT l.changed_at, l.entity, l.entity_name, l.field, l.old_value, l.new_value,
               s.full_name AS changed_by
        FROM settings_log l LEFT JOIN staff s ON s.id = l.staff_id
-       ORDER BY l.changed_at DESC LIMIT 15`
+       ORDER BY l.changed_at DESC LIMIT 40`
     );
     res.json({ service_points: sps.rows, visit_types: cats.rows, recent_changes: log.rows });
   } catch (err) {
@@ -61,10 +63,11 @@ const getConfig = async (req, res) => {
   }
 };
  
-// PUT /api/admin/service-points/:id  { active_clinicians, buffer_ratio }
+// PUT /api/admin/service-points/:id  { name?, active_clinicians?, buffer_ratio?, is_active? }
+// The token prefix (code) cannot be changed: it is part of every token already issued.
 const updateServicePoint = async (req, res) => {
   const id = parseInt(req.params.id);
-  const { active_clinicians, buffer_ratio } = req.body;
+  const { name, active_clinicians, buffer_ratio, is_active } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -79,6 +82,30 @@ const updateServicePoint = async (req, res) => {
         await client.query('UPDATE service_points SET active_clinicians = $2 WHERE id = $1', [id, n]);
         await logChange(client, req.staff.id, 'service_point', id, sp.name, 'active_clinicians', sp.active_clinicians, n);
       }
+    }
+    if (name !== undefined) {
+      const n = String(name || '').trim();
+      if (n.length < 2 || n.length > 60) throw httpError(400, 'Name must be 2 to 60 characters');
+      if (n !== sp.name) {
+        const clash = await client.query('SELECT 1 FROM service_points WHERE LOWER(name) = LOWER($1) AND id <> $2', [n, id]);
+        if (clash.rows[0]) throw httpError(409, 'Another service point already has that name');
+        await client.query('UPDATE service_points SET name = $2 WHERE id = $1', [id, n]);
+        await logChange(client, req.staff.id, 'service_point', id, sp.name, 'name', sp.name, n);
+      }
+    }
+    if (is_active !== undefined && Boolean(is_active) !== sp.is_active) {
+      if (!is_active) {
+        const busyQ = await client.query(
+          `SELECT COUNT(*)::int AS n FROM queue_tokens
+           WHERE service_point_id = $1 AND queue_date = CURRENT_DATE AND status IN ('waiting', 'called', 'in_consultation')`,
+          [id]
+        );
+        if (busyQ.rows[0].n > 0) {
+          throw httpError(409, `${sp.name} still has ${busyQ.rows[0].n} patient(s) in today's queue. Finish them first.`);
+        }
+      }
+      await client.query('UPDATE service_points SET is_active = $2 WHERE id = $1', [id, Boolean(is_active)]);
+      await logChange(client, req.staff.id, 'service_point', id, sp.name, 'is_active', sp.is_active, Boolean(is_active));
     }
     if (buffer_ratio !== undefined) {
       const b = Number(buffer_ratio);
@@ -206,5 +233,217 @@ const createVisitType = async (req, res) => {
   }
 };
  
-module.exports = { getConfig, updateServicePoint, updateVisitType, createVisitType };
+// POST /api/admin/service-points
+// { name, code, default_visit_type, default_minutes, active_clinicians?, buffer_ratio? }
+// Every service point needs one default visit type, so it is created at the same time.
+const createServicePoint = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const name = checkName(req.body.name);
+    const code = String(req.body.code || '').trim().toUpperCase();
+    if (!/^[A-Z]{2,5}$/.test(code)) throw httpError(400, 'Token prefix must be 2 to 5 letters, for example LAB');
+    const vtName = checkName(req.body.default_visit_type || 'General');
+    const minutes = checkMinutes(req.body.default_minutes ?? 10);
+    const clinicians = Number(req.body.active_clinicians ?? 1);
+    if (!Number.isInteger(clinicians) || clinicians < 1 || clinicians > 10) throw httpError(400, 'Clinicians must be a whole number from 1 to 10');
+    const buffer = Number(req.body.buffer_ratio ?? 0);
+    if (!Number.isFinite(buffer) || buffer < 0 || buffer > 0.5) throw httpError(400, 'Buffer must be between 0% and 50%');
+
+    await client.query('BEGIN');
+    const clash = await client.query(
+      'SELECT name, code FROM service_points WHERE LOWER(name) = LOWER($1) OR code = $2', [name, code]
+    );
+    if (clash.rows[0]) {
+      throw httpError(409, clash.rows[0].code === code
+        ? `The prefix ${code} is already used by ${clash.rows[0].name}`
+        : 'A service point with that name already exists');
+    }
+    const sp = await client.query(
+      `INSERT INTO service_points (name, code, default_service_minutes, active_clinicians, buffer_ratio)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [name, code, Math.round(minutes), clinicians, buffer]
+    );
+    const spId = sp.rows[0].id;
+    let vtCode = `${code}_${vtName.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 20) || 'TYPE'}`;
+    for (let i = 2; (await client.query('SELECT 1 FROM visit_categories WHERE code = $1', [vtCode])).rows[0]; i += 1) {
+      vtCode = `${vtCode}${i}`;
+    }
+    await client.query(
+      `INSERT INTO visit_categories (service_point_id, code, name, default_minutes, is_default, is_active, sort_order)
+       VALUES ($1, $2, $3, $4, TRUE, TRUE, 1)`,
+      [spId, vtCode, vtName, minutes]
+    );
+    await logChange(client, req.staff.id, 'service_point', spId, name, 'created', null,
+      `prefix ${code}, default visit type ${vtName} (${minutes} min)`);
+    await client.query('COMMIT');
+    res.status(201).json({ id: spId });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    fail(res, err);
+  } finally {
+    client.release();
+  }
+};
+
+// ---------------- Staff accounts ----------------
+// Managers and administrators manage accounts. Rules that keep the system safe:
+// only an administrator can create, change or reset an administrator account;
+// nobody can deactivate their own account or change their own role;
+// accounts are deactivated, never deleted, because every recorded event names its staff member.
+
+const ROLES = ['receptionist', 'clinician', 'manager', 'admin'];
+const ROLE_NAMES = { receptionist: 'Receptionist', clinician: 'Clinician', manager: 'Clinic manager', admin: 'Administrator' };
+
+const canManage = (actor, target) => actor.role === 'admin' || target.role !== 'admin';
+
+const checkServicePoint = async (client, role, spId) => {
+  if (role !== 'clinician') return null;
+  const id = parseInt(spId);
+  if (!id) throw httpError(400, 'Choose the service point this clinician works at');
+  const sp = await client.query('SELECT id, name, is_active FROM service_points WHERE id = $1', [id]);
+  if (!sp.rows[0] || !sp.rows[0].is_active) throw httpError(400, 'Choose an active service point');
+  return id;
+};
+
+// GET /api/admin/staff
+const listStaff = async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT s.id, s.username, s.full_name, s.role, s.service_point_id, sp.name AS service_point,
+              s.is_active, s.created_at
+       FROM staff s LEFT JOIN service_points sp ON sp.id = s.service_point_id
+       ORDER BY s.is_active DESC, s.role, s.full_name`
+    );
+    res.json(r.rows);
+  } catch (err) {
+    fail(res, err);
+  }
+};
+
+// POST /api/admin/staff  { full_name, username, role, service_point_id?, password }
+const createStaff = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const fullName = String(req.body.full_name || '').trim();
+    if (fullName.length < 2 || fullName.length > 100) throw httpError(400, 'Enter the full name (2 to 100 characters)');
+    const username = String(req.body.username || '').trim().toLowerCase();
+    if (!/^[a-z0-9._]{3,30}$/.test(username)) {
+      throw httpError(400, 'Username must be 3 to 30 characters: letters, numbers, dots or underscores');
+    }
+    const role = req.body.role;
+    if (!ROLES.includes(role)) throw httpError(400, 'Choose a role');
+    if (role === 'admin' && req.staff.role !== 'admin') throw httpError(403, 'Only an administrator can create an administrator account');
+    const problem = passwordProblem(req.body.password, username);
+    if (problem) throw httpError(400, problem);
+
+    await client.query('BEGIN');
+    const spId = await checkServicePoint(client, role, req.body.service_point_id);
+    const taken = await client.query('SELECT 1 FROM staff WHERE LOWER(username) = $1', [username]);
+    if (taken.rows[0]) throw httpError(409, 'That username is already taken');
+    const hash = await bcrypt.hash(req.body.password, 10);
+    const created = await client.query(
+      `INSERT INTO staff (username, full_name, password_hash, role, service_point_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [username, fullName, hash, role, spId]
+    );
+    await logChange(client, req.staff.id, 'staff', created.rows[0].id, fullName, 'created', null,
+      `${ROLE_NAMES[role]}, username ${username}`);
+    await client.query('COMMIT');
+    res.status(201).json({ id: created.rows[0].id });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    fail(res, err);
+  } finally {
+    client.release();
+  }
+};
+
+// PUT /api/admin/staff/:id  { full_name?, role?, service_point_id?, is_active? }
+const updateStaff = async (req, res) => {
+  const id = parseInt(req.params.id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query('SELECT * FROM staff WHERE id = $1 FOR UPDATE', [id]);
+    const st = cur.rows[0];
+    if (!st) throw httpError(404, 'Staff member not found');
+    if (!canManage(req.staff, st)) throw httpError(403, 'Only an administrator can change an administrator account');
+    const self = id === req.staff.id;
+    const { full_name, role, service_point_id, is_active } = req.body;
+
+    if (full_name !== undefined) {
+      const n = String(full_name || '').trim();
+      if (n.length < 2 || n.length > 100) throw httpError(400, 'Enter the full name (2 to 100 characters)');
+      if (n !== st.full_name) {
+        await client.query('UPDATE staff SET full_name = $2 WHERE id = $1', [id, n]);
+        await logChange(client, req.staff.id, 'staff', id, st.full_name, 'full_name', st.full_name, n);
+      }
+    }
+
+    const newRole = role !== undefined ? role : st.role;
+    if (!ROLES.includes(newRole)) throw httpError(400, 'Choose a role');
+    if (newRole !== st.role) {
+      if (self) throw httpError(400, 'You cannot change your own role');
+      if (newRole === 'admin' && req.staff.role !== 'admin') throw httpError(403, 'Only an administrator can make someone an administrator');
+    }
+    const newSp = newRole === 'clinician'
+      ? await checkServicePoint(client, newRole, service_point_id !== undefined ? service_point_id : st.service_point_id)
+      : null;
+    if (newRole !== st.role) {
+      await client.query('UPDATE staff SET role = $2 WHERE id = $1', [id, newRole]);
+      await logChange(client, req.staff.id, 'staff', id, st.full_name, 'role', ROLE_NAMES[st.role], ROLE_NAMES[newRole]);
+    }
+    if ((newSp || null) !== (st.service_point_id || null)) {
+      const names = await client.query('SELECT id, name FROM service_points WHERE id = ANY($1::int[])',
+        [[st.service_point_id, newSp].filter(Boolean)]);
+      const nameOf = (x) => names.rows.find((r) => r.id === x)?.name || 'none';
+      await client.query('UPDATE staff SET service_point_id = $2 WHERE id = $1', [id, newSp]);
+      await logChange(client, req.staff.id, 'staff', id, st.full_name, 'service_point', nameOf(st.service_point_id), nameOf(newSp));
+    }
+
+    if (is_active !== undefined && Boolean(is_active) !== st.is_active) {
+      if (self) throw httpError(400, 'You cannot deactivate your own account');
+      await client.query('UPDATE staff SET is_active = $2 WHERE id = $1', [id, Boolean(is_active)]);
+      await logChange(client, req.staff.id, 'staff', id, st.full_name, 'is_active', st.is_active, Boolean(is_active));
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    fail(res, err);
+  } finally {
+    client.release();
+  }
+};
+
+// POST /api/admin/staff/:id/password  { new_password }
+// Sets a new password for someone who has forgotten theirs. The password itself is never logged.
+const resetStaffPassword = async (req, res) => {
+  const id = parseInt(req.params.id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query('SELECT id, username, full_name, role FROM staff WHERE id = $1 FOR UPDATE', [id]);
+    const st = cur.rows[0];
+    if (!st) throw httpError(404, 'Staff member not found');
+    if (!canManage(req.staff, st)) throw httpError(403, 'Only an administrator can reset an administrator password');
+    const problem = passwordProblem(req.body.new_password, st.username);
+    if (problem) throw httpError(400, problem);
+    const hash = await bcrypt.hash(req.body.new_password, 10);
+    await client.query('UPDATE staff SET password_hash = $2 WHERE id = $1', [id, hash]);
+    await logChange(client, req.staff.id, 'staff', id, st.full_name, 'password', null, 'reset');
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    fail(res, err);
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = {
+  getConfig, updateServicePoint, createServicePoint, updateVisitType, createVisitType,
+  listStaff, createStaff, updateStaff, resetStaffPassword,
+};
  

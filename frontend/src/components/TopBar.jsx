@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import ChangePassword from './ChangePassword';
 
 const ROLE_NAMES = {
   receptionist: 'Receptionist',
@@ -16,6 +18,7 @@ const LINKS_BY_ROLE = {
 export default function TopBar({ subtitle }) {
   const staff = JSON.parse(sessionStorage.getItem('staff') || '{}');
   const links = LINKS_BY_ROLE[staff.role] || [];
+  const [changing, setChanging] = useState(false);
 
   const signOut = () => {
     sessionStorage.clear();
@@ -48,9 +51,13 @@ export default function TopBar({ subtitle }) {
             <div className="hq-user-name">{staff.full_name}</div>
             <div className="hq-user-role">{ROLE_NAMES[staff.role] || staff.role}</div>
           </div>
+          <button type="button" className="hq-btn hq-btn-plain" style={{ fontSize: 14 }} onClick={() => setChanging(true)}>
+            Change password
+          </button>
           <button type="button" className="hq-btn hq-btn-secondary" onClick={signOut}>Sign out</button>
         </div>
       </div>
+      {changing && <ChangePassword onClose={() => setChanging(false)} />}
     </header>
   );
 }
