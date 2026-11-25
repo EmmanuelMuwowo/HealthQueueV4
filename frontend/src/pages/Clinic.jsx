@@ -40,7 +40,7 @@ export default function Clinic() {
   const [followFor, setFollowFor] = useState(null); // the patient just completed
   const [follow, setFollow] = useState({ date: '', time: '09:00', category_id: '' });
   const [followDone, setFollowDone] = useState('');
-  const [refer, setRefer] = useState({ service_point_id: '', category_id: '' });
+  const [refer, setRefer] = useState({ service_point_id: '', category_id: '', urgent: false });
   const [referDone, setReferDone] = useState('');
 
   useEffect(() => {
@@ -77,6 +77,7 @@ export default function Clinic() {
       setRefer({
         service_point_id: target ? String(target.id) : '',
         category_id: target ? defaultTypeFor(target.id) : '',
+        urgent: false,
       });
       await load();
     } catch (err) {
@@ -117,10 +118,12 @@ export default function Clinic() {
         token_id: followFor.id,
         service_point_id: parseInt(refer.service_point_id),
         category_id: refer.category_id ? parseInt(refer.category_id) : undefined,
+        // Triage (or any clinician) can mark the patient urgent for the next queue
+        priority: refer.urgent ? 'urgent' : 'normal',
       });
       const e = res.data.ewt;
       setReferDone(
-        `${res.data.token.token_number} issued at ${res.data.service_point} · ` +
+        `${res.data.token.token_number}${refer.urgent ? ' (urgent)' : ''} issued at ${res.data.service_point} · ` +
         `${e.patients_ahead} ahead · wait ${e.ewt_low}–${e.ewt_high} min. ` +
         (res.data.patient.phone_number ? 'SMS sent to the patient.' : 'No phone number: tell the patient the token.')
       );
@@ -315,13 +318,13 @@ export default function Clinic() {
                 ) : (
                   <>
                     <div className="hq-caption" style={{ marginTop: 2 }}>
-                      Optional. The patient joins that queue straight away, without going back to reception.
+                      Optional. The patient joins that queue straight away, without going back to reception. Tick Urgent to put them at the front.
                     </div>
                     <div style={S.followGrid}>
                       <div className="hq-field" style={{ marginBottom: 0 }}>
                         <label htmlFor="r_sp">Service point</label>
                         <select id="r_sp" className="hq-select" value={refer.service_point_id}
-                          onChange={(e) => setRefer({ service_point_id: e.target.value, category_id: defaultTypeFor(e.target.value) })}>
+                          onChange={(e) => setRefer({ ...refer, service_point_id: e.target.value, category_id: defaultTypeFor(e.target.value) })}>
                           {otherPoints.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
                         </select>
                       </div>
@@ -334,6 +337,13 @@ export default function Clinic() {
                           ))}
                         </select>
                       </div>
+                      <label htmlFor="r_urgent" style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontWeight: 600,
+                        color: refer.urgent ? 'var(--hq-red, #FF3B30)' : 'inherit', cursor: 'pointer' }}>
+                        <input id="r_urgent" type="checkbox" checked={refer.urgent}
+                          style={{ width: 20, height: 20, accentColor: '#FF3B30' }}
+                          onChange={(e) => setRefer({ ...refer, urgent: e.target.checked })} />
+                        Urgent
+                      </label>
                       <button type="button" className="hq-btn hq-btn-primary" style={{ minHeight: 44 }}
                         disabled={busy || !refer.service_point_id} onClick={referPatient}>
                         Send patient
